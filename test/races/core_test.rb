@@ -21,6 +21,7 @@ class CoreRaceTest < DeadheatIntegrationTest
       r.setup { @product = Product.create!(name: "Shirt", stock: 1) }
       r.twice { post "/safe_buy/#{@product.id}" }
     end
+    return assert_sqlite_lock_crash(result) if deferred_sqlite?
     assert_no_findings(result)
   end
 
@@ -45,6 +46,7 @@ class CoreRaceTest < DeadheatIntegrationTest
     result = race("signup") do |r|
       r.twice { post "/signup", params: { email: "sam@example.com" } }
     end
+    return assert_sqlite_lock_crash(result) if deferred_sqlite?
     return assert_no_findings(result) if serializes_transactions?
 
     assert_equal :duplicate_rule, result.races.first&.kind, result.failure_message
@@ -55,6 +57,7 @@ class CoreRaceTest < DeadheatIntegrationTest
     result = race("signup, unique index") do |r|
       r.twice { post "/safe_signup", params: { email: "sam@example.com" } }
     end
+    return assert_sqlite_lock_crash(result) if deferred_sqlite?
     assert_no_findings(result)
   end
 
@@ -62,6 +65,7 @@ class CoreRaceTest < DeadheatIntegrationTest
     result = race("follow") do |r|
       r.twice { post "/follow", params: { user_id: 1, target_id: 2 } }
     end
+    return assert_sqlite_lock_crash(result) if deferred_sqlite?
     return assert_no_findings(result) if serializes_transactions?
 
     assert_equal [:crash], kinds(result), result.failure_message
@@ -73,6 +77,7 @@ class CoreRaceTest < DeadheatIntegrationTest
     result = race("follow, create_or_find_by") do |r|
       r.twice { post "/safe_follow", params: { user_id: 1, target_id: 2 } }
     end
+    return assert_sqlite_lock_crash(result) if deferred_sqlite?
     assert_no_findings(result)
   end
 

@@ -2,13 +2,13 @@ module Deadheat
   class Railtie < Rails::Railtie
     # The sign-in warm-up endpoint, in the test environment only. It goes right after Warden when
     # Devise is used, so Devise's queued login is written into that request's session.
+    # It's a route, not middleware, so the request passes through every middleware (Warden, the
+    # session) whatever order they were added in.
     initializer "deadheat.ping" do |app|
       next unless Rails.env.test?
 
-      if defined?(Warden::Manager)
-        app.config.middleware.insert_after Warden::Manager, Deadheat::Ping
-      else
-        app.config.middleware.use Deadheat::Ping
+      app.routes.prepend do
+        get Deadheat::Ping::PATH, to: Deadheat::Ping.endpoint, as: :deadheat_ping
       end
     end
 

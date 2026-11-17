@@ -43,9 +43,22 @@ module Deadheat
         status = response.status
         location = response.headers["Location"]&.then { |url| Effects.mask(url.sub(%r{\Ahttps?://[^/]+}, ""), new_ids) }
       end
-      error = actor.error && !actor.error.is_a?(Deadheat::Stop) ? actor.error.class.name : nil
-      error ||= response.request.env["action_dispatch.exception"]&.class&.name if response.respond_to?(:request) && response.request
-      Reply.new(status, location, error)
+      exception = actor.error && !actor.error.is_a?(Deadheat::Stop) ? actor.error : nil
+      exception ||= response.request.env["action_dispatch.exception"] if response.respond_to?(:request) && response.request
+      Reply.new(status, location, error_name(exception))
+    end
+
+    # The class, plus the database's own words for a StatementInvalid, which covers many causes
+    # ("database is locked", a lock wait timeout).
+    def self.error_name(exception)
+      return unless exception
+
+      name = exception.class.name
+      return name unless name == "ActiveRecord::StatementInvalid"
+
+      cause = exception.cause&.message || exception.message
+      words = cause.to_s.lines.first.to_s.strip.sub(/\A[\w:]+:\s*/, "")[0, 60]
+      words.empty? ? name : "#{name} (#{words})"
     end
 
     # Same data, same side effects, same replies, same checks.

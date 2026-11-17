@@ -1,0 +1,3 @@
+# Dead Heat on Rails 7.2:  BUNDLE_GEMFILE=gemfiles/rails_7_2.gemfile bundle exec rake test
+ENV["RAILS"] = "7.2"
+eval_gemfile File.expand_path("../Gemfile", __dir__)

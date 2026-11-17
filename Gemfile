@@ -7,7 +7,7 @@ rails = ENV.fetch("RAILS", "8.1")
 gem "rails", "~> #{rails}.0"
 
 gem "rake"
-gem "minitest", rails == "7.2" ? "< 6" : ">= 5"
+gem "minitest", rails < "8.0" ? "< 6" : ">= 5"
 gem "pg"
 gem "mysql2"
 gem "trilogy"

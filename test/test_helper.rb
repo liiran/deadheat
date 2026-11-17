@@ -23,6 +23,17 @@ module RaceHelpers
     ActiveRecord::Base.connection.adapter_name.match?(/sqlite/i) && Rails::VERSION::MAJOR >= 8
   end
 
+  # Before Rails 8, SQLite transactions start DEFERRED: two writers both take read locks, and the
+  # second can't upgrade to write ("database is locked"), a real 500. Dead Heat reports it as a crash.
+  def deferred_sqlite?
+    ActiveRecord::Base.connection.adapter_name.match?(/sqlite/i) && Rails::VERSION::MAJOR < 8
+  end
+
+  def assert_sqlite_lock_crash(result)
+    assert result.crashes.any? { |f| f.title.include?("database is locked") }, -> { "expected SQLite's 'database is locked', got:\n#{result.failure_message}" }
+    assert_includes result.crashes.first.fixes.first, "IMMEDIATE"
+  end
+
   def kinds(result)
     result.findings.map(&:kind)
   end

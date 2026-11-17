@@ -5,6 +5,8 @@ class RepliesRaceTest < DeadheatIntegrationTest
     result = race("follow, mixed replies") do |r|
       r.twice { post "/mixed_follow", params: { user_id: 7, target_id: 8 } }
     end
+    return assert_sqlite_lock_crash(result) if deferred_sqlite?
+
     assert result.passed?, result.failure_message
     return if serializes_transactions?
 

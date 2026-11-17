@@ -91,7 +91,7 @@ module Deadheat
       session.get(Ping::PATH)
       return if session.response&.status == 204
 
-      raise Refused, "Signing in #{Sessions.label_for(user)} didn't work: the warm-up request got #{session.response&.status.inspect}. Is Deadheat::Ping in the middleware (it's added automatically in the test environment)?"
+      raise Refused, "Signing in #{Sessions.label_for(user)} didn't work: the warm-up request got #{session.response&.status.inspect}. Dead Heat adds the /__deadheat/ping route in the test environment; does a catch-all route earlier in config/routes.rb take it?"
     end
   end
 end
