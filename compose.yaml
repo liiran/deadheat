@@ -1,0 +1,49 @@
+# Development and test environment. Everything runs in containers, so it works the same on
+# Windows, macOS and Linux:
+#
+#   docker compose run --rm dev bundle exec rake test           # every database
+#   docker compose run --rm dev bundle exec rake test DB=mysql  # one database
+#
+# The databases keep their data in memory (tmpfs) and skip disk syncs: they're throwaway and fast.
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: docker/dev.Dockerfile
+    volumes:
+      - .:/deadheat
+      - bundle:/usr/local/bundle
+    environment:
+      POSTGRES_HOST: postgres
+      MYSQL_HOST: mysql
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_PASSWORD: postgres
+    command: postgres -c fsync=off -c synchronous_commit=off -c full_page_writes=off -c max_connections=200
+    tmpfs: /var/lib/postgresql/data
+    healthcheck:
+      test: pg_isready -U postgres
+      interval: 1s
+      retries: 30
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ROOT_HOST: "%"
+    command: --innodb-flush-log-at-trx-commit=0 --skip-log-bin --max-connections=200
+    tmpfs: /var/lib/mysql
+    healthcheck:
+      test: mysqladmin ping -h 127.0.0.1 -uroot -proot --silent
+      interval: 1s
+      retries: 60
+
+volumes:
+  bundle:

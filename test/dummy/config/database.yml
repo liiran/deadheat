@@ -1,0 +1,20 @@
+<% db = ENV.fetch("DB", "sqlite") %>
+test:
+<% if db == "postgres" %>
+  adapter: postgresql
+  host: <%= ENV.fetch("POSTGRES_HOST", "localhost") %>
+  username: postgres
+  password: postgres
+  database: deadheat_test
+<% elsif db == "mysql" || db == "trilogy" %>
+  adapter: <%= db == "trilogy" ? "trilogy" : "mysql2" %>
+  host: <%= ENV.fetch("MYSQL_HOST", "127.0.0.1") %>
+  username: root
+  password: root
+  database: deadheat_test
+<% else %>
+  adapter: sqlite3
+  database: <%= Rails.root.join("db/test.sqlite3") %>
+  timeout: 5000
+<% end %>
+  pool: 10
