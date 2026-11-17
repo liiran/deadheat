@@ -46,11 +46,7 @@ module Deadheat
       return unless info && info.kind == :write
 
       info.key = next_key(info)
-      pause = schedule&.before_write(info.key)
-      return unless pause
-
-      info.paused_before = pause
-      sleep(pause)
+      info.paused_before = schedule&.before_write(info.key)
     end
 
     # Called by the probe when that query finishes.
@@ -68,11 +64,8 @@ module Deadheat
       @events << info
       return unless info.kind == :read && !info.locking
 
-      pause = schedule&.after_read(info.key)
-      return unless pause
-
-      info.paused_after = pause
-      sleep(pause)
+      # The schedule does the waiting itself and says how long it waited.
+      info.paused_after = schedule&.after_read(info.key)
     end
 
     private

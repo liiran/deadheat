@@ -1,34 +1,54 @@
 module Deadheat
-  # Decides, for each try, where one request should wait for a moment.
+  # Decides, for each try, where requests should wait for a moment.
   #
   # Races live in the gap between reading a value and writing it back ("read the stock, then save
   # the stock"). Requests started together usually still run one after the other, because each takes
   # only milliseconds. So the plan looks at a one-at-a-time run, finds each read that is followed by a
-  # write to the same table, and in each try pauses ONE request right after such a read for about as
-  # long as the other request needs to reach the same read. Then the other request reads the old value
-  # too. Which request waits, and at which read, changes from try to try. Every fourth try uses small
-  # random pauses instead, and the first try has none at all.
+  # write to the same table, and widens that gap in one of three ways, changing from try to try:
+  #
+  # - meet:    every request waits right after that read until the others have made the same read
+  #            (at most max_pause), so all of them read before any of them writes.
+  # - first:   whichever request makes that read first waits a fixed while, so another one reads,
+  #            and maybe writes, in between.
+  # - random:  small random pauses after reads, for orderings the other two don't produce.
+  #
+  # The first try has no pauses at all.
   class PausePlan
     # What one actor does in one try. Keys look like "read:products#1" (the 1st read of products).
     class Schedule
-      attr_reader :after_reads, :before_writes, :description
+      attr_reader :description
 
-      def initialize(after_reads: {}, before_writes: {}, jitter: nil, description: nil)
+      def initialize(after_reads: {}, meet: nil, first: nil, jitter: nil, max_pause: 0.25)
         @after_reads = after_reads
-        @before_writes = before_writes
+        @meet = meet
+        @first = first
         @jitter = jitter
-        @description = description
+        @max_pause = max_pause
       end
 
+      # Waits if this read is a pause point. Returns the seconds waited, or nil.
       def after_read(key)
-        return @after_reads[key] if @after_reads.key?(key)
-        return unless @jitter
+        if @meet && @meet[:key] == key && !@met
+          @met = true
+          started = Deadheat.now
+          @meet[:latch].count_down
+          @meet[:latch].wait(@max_pause)
+          return Deadheat.now - started
+        end
+        if @first && @first[:key] == key && @first[:taken].make_true
+          sleep(@first[:seconds])
+          return @first[:seconds]
+        end
+        seconds = @after_reads[key]
+        seconds ||= @jitter.rand < 0.5 ? @jitter.rand(0.0..0.005) : nil if @jitter
+        return unless seconds
 
-        @jitter.rand < 0.5 ? @jitter.rand(0.0..0.005) : nil
+        sleep(seconds)
+        seconds
       end
 
-      def before_write(key)
-        @before_writes[key]
+      def before_write(_key)
+        nil
       end
     end
 
@@ -59,41 +79,50 @@ module Deadheat
 
       k = number - 1
       rng = Random.new(seed * 1_000 + number)
-      cycle = count + 2 # everyone waits, each actor alone waits, random pauses
-      position = k % cycle
-      round = k / cycle
-      return jitter(rng, count) if position == cycle - 1
-      return everyone_waits(rng, count, round) if position.zero?
-
-      victim = position - 1
-      gaps = gaps(@timelines[victim])
-      return jitter(rng, count) if gaps.empty?
-
-      gap = gaps[round % gaps.size]
-      other = (victim + 1) % count
-      wait = wait_for(gap, @timelines[victim], @timelines[other], rng, round)
-      schedules = Array.new(count)
-      schedules[victim] = Schedule.new(after_reads: { gap.key => wait })
-      [schedules, "actor #{victim + 1} waits #{(wait * 1000).round} ms after #{describe(gap)}"]
+      # meet, first-waits, meet at the next gap, first-waits longer at the next gap, random
+      round = k / 5
+      case k % 5
+      when 0 then meet(count, round * 2)
+      when 1 then first_waits(count, round * 2, rng, 1)
+      when 2 then meet(count, round * 2 + 1)
+      when 3 then first_waits(count, round * 2 + 1, rng, 3)
+      else jitter(rng, count)
+      end
     end
 
     private
 
-    # Every actor waits right after the same kind of read, so all of them read before any of them
-    # writes, whichever one happened to start first.
-    def everyone_waits(rng, count, round)
+    # Whichever request makes the read first waits a while, long enough for another to read (and
+    # perhaps write) in between.
+    def first_waits(count, index, rng, scale)
       gaps = gaps(@timelines.first)
       return jitter(rng, count) if gaps.empty?
 
-      gap = gaps[round % gaps.size]
-      spread = @timelines.filter_map { |steps| steps.find { |step| step.key == gap.key }&.offset }
-      wait = ((spread.max.to_f - spread.min.to_f) + rng.rand(0.004..0.010) * (1 + (round % 3))).clamp(0.002, @max_pause)
-      schedules = Array.new(count) { Schedule.new(after_reads: { gap.key => wait }) }
-      [schedules, "every request waits #{(wait * 1000).round} ms after #{describe(gap)}"]
+      gap = gaps[index % gaps.size]
+      wait = (others_reach(gap) + rng.rand(0.003..0.008) * scale).clamp(0.002, @max_pause)
+      first = { key: gap.key, seconds: wait, taken: Concurrent::AtomicBoolean.new(false) }
+      schedules = Array.new(count) { Schedule.new(first: first, max_pause: @max_pause) }
+      [schedules, "whichever request makes #{describe(gap)} first waits #{(wait * 1000).round} ms"]
+    end
+
+    # How much later than the first actor the others reach the same read, in the one-at-a-time run.
+    def others_reach(gap)
+      offsets = @timelines.filter_map { |steps| steps.find { |step| step.key == gap.key }&.offset }
+      offsets.size > 1 ? offsets.max - offsets.min : 0.0
+    end
+
+    def meet(count, index)
+      gaps = gaps(@timelines.first)
+      return jitter(Random.new(seed + index), count) if gaps.empty?
+
+      gap = gaps[index % gaps.size]
+      latch = Concurrent::CountDownLatch.new(count)
+      schedules = Array.new(count) { Schedule.new(meet: { key: gap.key, latch: latch }, max_pause: @max_pause) }
+      [schedules, "every request waits after #{describe(gap)} until all have made it"]
     end
 
     def jitter(rng, count)
-      schedules = Array.new(count) { |i| Schedule.new(jitter: Random.new(rng.seed + i)) }
+      schedules = Array.new(count) { |i| Schedule.new(jitter: Random.new(rng.seed + i), max_pause: @max_pause) }
       [schedules, "small random pauses after reads"]
     end
 
@@ -112,17 +141,11 @@ module Deadheat
       reads.map(&:first)
     end
 
-    def wait_for(gap, mine, theirs, rng, round)
-      same = theirs.find { |step| step.key == gap.key }
-      target = same&.offset || theirs.find { |step| step.kind == :write }&.offset || (theirs.last&.offset.to_f / 2)
-      base = target - gap.offset
-      extra = rng.rand(0.002..0.008) * (1 + (round % 3))
-      (base + extra).clamp(0.002, @max_pause)
-    end
 
     def describe(step)
       number = step.key[/#(\d+)\z/, 1].to_i
       "its #{number.ordinalize} read of #{step.tables.join(', ')}"
     end
+
   end
 end

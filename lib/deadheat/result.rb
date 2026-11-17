@@ -2,9 +2,9 @@ module Deadheat
   # What a whole race found over all its tries.
   class Result
     attr_reader :name, :location, :database, :tries, :counts, :findings, :seed, :expected,
-                :warnings, :seconds, :actors, :reproduce
+                :warnings, :seconds, :actors, :reproduce, :log
 
-    def initialize(name:, location:, database:, tries:, counts:, findings:, seed:, expected:, warnings:, seconds:, actors:, reproduce: nil)
+    def initialize(name:, location:, database:, tries:, counts:, findings:, seed:, expected:, warnings:, seconds:, actors:, reproduce: nil, log: [])
       @name = name
       @location = location
       @database = database
@@ -17,6 +17,7 @@ module Deadheat
       @seconds = seconds
       @actors = actors
       @reproduce = reproduce
+      @log = log
     end
 
     def races
@@ -48,7 +49,7 @@ module Deadheat
       {
         name: name, location: location, database: database, tries: tries, counts: counts, seed: seed,
         passed: passed?, irreversible: irreversible?, seconds: seconds, actors: actors,
-        expected: expected, warnings: warnings, reproduce: reproduce,
+        expected: expected, warnings: warnings, reproduce: reproduce, log: log,
         findings: findings.map(&:to_h)
       }
     end

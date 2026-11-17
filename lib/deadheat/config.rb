@@ -34,6 +34,8 @@ module Deadheat
     attr_accessor :seed
     # Where results are written for `deadheat report`.
     attr_accessor :results_dir
+    # Pauses on (the default) or off. Off is only useful for measuring what the pauses add.
+    attr_accessor :pauses
 
     attr_reader :ignored_tables, :ignored_columns, :sign_in_hook
 
@@ -44,6 +46,7 @@ module Deadheat
       @lock_timeout = 5
       @seed = ENV["DEADHEAT_SEED"]&.to_i
       @results_dir = nil
+      @pauses = ENV["DEADHEAT_PAUSES"] != "0"
       @ignored_tables = DEFAULT_IGNORED_TABLES.dup
       @ignored_columns = { "*" => DEFAULT_IGNORED_COLUMNS.dup }
       @sign_in_hook = nil

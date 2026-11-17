@@ -143,8 +143,9 @@ module Deadheat
       plan = PausePlan.new(timelines: timelines(first), seed: @seed, max_pause: @config.max_pause)
       counts = Hash.new(0)
       findings = {}
+      log = []
       tries.times do |number|
-        schedules, description = plan.for_try(number)
+        schedules, description = @config.pauses ? plan.for_try(number) : [nil, "no pauses (pauses are off)"]
         begin
           outcome = perform(:together, schedules: schedules)
         rescue Hung => e
@@ -154,6 +155,7 @@ module Deadheat
         end
         verdict = Verdict.judge(outcome, serial: serial, singles: singles, schema: @schema)
         counts[verdict.status] += 1
+        log << { try: number + 1, pauses: description, status: verdict.status }
         next if verdict.ok?
 
         key = [verdict.status, verdict.kind]
@@ -171,7 +173,7 @@ module Deadheat
         findings: findings.values.sort_by { |f| Verdict::STATUSES.index(f.status) || 9 }.reverse,
         seed: @seed, expected: { replies: serial.first.replies.map(&:to_s), changes: serial.first.canon.to_h },
         warnings: warnings, seconds: (Deadheat.now - started).round(2), actors: names,
-        reproduce: @reproduce || reproduce_command
+        reproduce: @reproduce || reproduce_command, log: log
       )
     end
 
