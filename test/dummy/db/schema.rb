@@ -43,6 +43,24 @@ ActiveRecord::Schema.define do
     t.integer :lock_version, null: false, default: 0
   end
 
+  create_table :teams, force: true do |t|
+    t.string :name
+    t.integer :budget, null: false, default: 0
+  end
+
+  # Devise users (database_authenticatable + trackable).
+  create_table :members, force: true do |t|
+    t.references :team
+    t.string :email, null: false, default: ""
+    t.string :encrypted_password, null: false, default: ""
+    t.integer :sign_in_count, default: 0, null: false
+    t.datetime :current_sign_in_at
+    t.datetime :last_sign_in_at
+    t.string :current_sign_in_ip
+    t.string :last_sign_in_ip
+  end
+  add_index :members, :email, unique: true
+
   # A join table without a primary key.
   create_table :taggings, id: false, force: true do |t|
     t.integer :post_id

@@ -1,4 +1,7 @@
 Rails.application.routes.draw do
+  devise_for :members
+  post "/team/spend", to: "teams#spend"
+  post "/team/safe_spend", to: "teams#safe_spend"
   post "/buy/:id", to: "shop#buy"
   post "/safe_buy/:id", to: "shop#safe_buy"
   post "/like/:id", to: "likes#like"

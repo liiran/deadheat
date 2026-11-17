@@ -25,6 +25,7 @@ module Deadheat
       #   r.as(:alice) { post … }                       a label, nobody signed in
       #   r.as(users(:alice)) { post … }                signed in as that user
       #   r.as(:alice, sign_in: users(:alice)) { … }    both
+      #   r.as(:alice, sign_in: -> { @alice }) { … }    a user made in r.setup
       def as(who = nil, sign_in: nil, &block)
         raise ArgumentError, "r.as needs a block with the request(s) to send" unless block
 
@@ -86,22 +87,24 @@ module Deadheat
 
     def run
       started = Deadheat.now
-      definition = Definition.new
-      @context.instance_exec(definition, &@definition)
-      raise ArgumentError, "A race needs at least two actors (r.as, r.twice or r.run)" if definition.actors.size < 2
-
-      connection = Preflight.check!(actors: definition.actors.size)
+      connection = Preflight.check!
       Probe.install!
       Source.reset!
       @schema = Schema.new(connection)
       @seed = @config.seed_for_run
-      tries = definition.tries_override || @tries || @config.tries
 
       Writes.clear
       result = nil
       Writes.track do
+        # Taken before anything of the race runs, so whatever it creates is cleaned up afterwards.
         original = Snapshot.take(@schema)
         begin
+          definition = Definition.new
+          @context.instance_exec(definition, &@definition)
+          raise ArgumentError, "A race needs at least two actors (r.as, r.twice or r.run)" if definition.actors.size < 2
+
+          Preflight.check_pool!(definition.actors.size)
+          tries = definition.tries_override || @tries || @config.tries
           with_test_job_adapter do
             @context.instance_exec(&definition.setup_block) if definition.setup_block
             @sessions = Sessions.new(@context, definition.actors)

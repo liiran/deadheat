@@ -4,13 +4,12 @@ module Deadheat
   module Preflight
     module_function
 
-    def check!(actors:)
+    def check!
       refuse!("Dead Heat only runs in the test environment (RAILS_ENV is #{Rails.env}). It writes to and restores database tables.") unless Rails.env.test?
 
       connection = ActiveRecord::Base.respond_to?(:lease_connection) ? ActiveRecord::Base.lease_connection : ActiveRecord::Base.connection
       check_database_name!(connection)
       check_environment_record!
-      check_pool!(actors)
       check_reloading!
       check_concurrency!
       check_transaction!(connection)

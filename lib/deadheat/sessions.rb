@@ -35,7 +35,9 @@ module Deadheat
       return Prepared.new(spec, nil, nil) unless spec[:http]
 
       session = @context.open_session
-      sign_in(session, spec[:user]) if spec[:user]
+      user = spec[:user]
+      user = @context.instance_exec(&user) if user.respond_to?(:call) # sign_in: -> { @alice }, after setup
+      sign_in(session, user) if user
       Prepared.new(spec, session, jar(session).dup)
     end
 
