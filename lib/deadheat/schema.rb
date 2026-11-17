@@ -2,7 +2,7 @@ module Deadheat
   # What Dead Heat needs to know about the database: tables, primary keys, column types, and which
   # columns point at rows in other tables (foreign keys, belongs_to and polymorphic associations).
   class Schema
-    INTERNAL = %w[schema_migrations ar_internal_metadata].freeze
+    INTERNAL = %w[schema_migrations ar_internal_metadata sqlite_sequence].freeze
 
     attr_reader :connection, :tables
 

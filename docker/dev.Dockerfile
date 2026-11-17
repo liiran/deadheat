@@ -1,6 +1,7 @@
 # The environment Dead Heat is developed and tested in: Ruby plus the client libraries for
 # PostgreSQL, MySQL and SQLite. The databases themselves run as their own services (compose.yaml).
-FROM ruby:3.4-slim
+ARG RUBY_VERSION=3.4
+FROM ruby:${RUBY_VERSION}-slim
 
 RUN apt-get update -qq \
  && apt-get install -y --no-install-recommends \
@@ -8,7 +9,7 @@ RUN apt-get update -qq \
       libpq-dev postgresql-client \
       default-libmysqlclient-dev libssl-dev \
       libsqlite3-dev sqlite3 \
-      libyaml-dev zlib1g-dev \
+      libyaml-dev zlib1g-dev libvips-dev \
  && rm -rf /var/lib/apt/lists/*
 
 ENV BUNDLE_JOBS=8 \

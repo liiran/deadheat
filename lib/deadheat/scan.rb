@@ -39,6 +39,7 @@ module Deadheat
     CREATES = %i[create create! insert insert! new build].freeze
     COUNTS = %i[count size length exists? any? none? empty? sum].freeze
     FINDS = %i[find_by find_by! first take last].freeze
+    STATE_CHECKS = %i[valid? invalid? persisted? new_record? destroyed? changed? errors frozen? readonly? previously_new_record?].freeze
     # Writes that are safe on their own: the database does the arithmetic.
     ATOMIC = %i[increment! decrement! update_counters increment_counter decrement_counter upsert upsert_all].freeze
 
@@ -285,7 +286,7 @@ module Deadheat
         locked = Set.new
         walk(body) do |node|
           if node.is_a?(Prism::LocalVariableWriteNode) || node.is_a?(Prism::InstanceVariableWriteNode)
-            locked << node.name.to_s.delete("@") if chain_names(node.value).include?(:lock)
+            locked << node.name.to_s if chain_names(node.value).include?(:lock)
           elsif node.is_a?(Prism::CallNode) && node.name == :lock! && variable(node.receiver)
             locked << variable(node.receiver)
           end
@@ -314,6 +315,8 @@ module Deadheat
           names = chain_names(node).reverse
           next unless root && names.any? && names.none? { |name| name.to_s.end_with?("!", "=") || WRITES.include?(name) }
           next if names == [:id]
+          # `record.valid?`, `record.persisted?`: the record's own state, not data another request writes.
+          next if kind == :var && STATE_CHECKS.include?(names.first)
 
           count = names.any? { |name| COUNTS.include?(name) }
           if kind == :var
@@ -394,12 +397,20 @@ module Deadheat
         case node.name
         when :first_or_create, :first_or_create!
           add(:look_then_create, node.location.start_line, "`#{node.name}` looks for a row, then creates one; two requests at once can both create it.", defn.name)
-        when :find_or_create_by, :find_or_create_by!
+        when :find_or_create_by, :find_or_create_by!, :find_or_initialize_by
           model = constant_name(root_receiver(node)) || (association?(node.receiver) ? nil : node.receiver&.slice)
           columns = keyword_keys(node)
           return if model && unique_index?(model, columns)
 
           add(:look_then_create, node.location.start_line, "`#{node.name}` without a unique index on #{columns.join(', ')} can make two rows when two requests arrive at once#{index_note(model, columns)}.", defn.name)
+        when :first_or_initialize
+          # Model.where(a: …, b: …).first_or_initialize, then save: a new row unless one exists.
+          where = node.receiver
+          model = constant_name(root_receiver(node))
+          columns = where.is_a?(Prism::CallNode) && where.name == :where ? keyword_keys(where) : []
+          return if model && columns.any? && unique_index?(model, columns)
+
+          add(:look_then_create, node.location.start_line, "`#{node.slice}` looks for a row and starts a new one if it's missing; two requests at once can both save a new one#{index_note(model, columns)}.", defn.name)
         end
       end
 
@@ -508,7 +519,7 @@ module Deadheat
       def variable(node)
         case node
         when Prism::LocalVariableReadNode then node.name.to_s
-        when Prism::InstanceVariableReadNode then node.name.to_s.delete("@")
+        when Prism::InstanceVariableReadNode then node.name.to_s
         end
       end
 

@@ -22,6 +22,26 @@ services:
       mysql:
         condition: service_healthy
 
+  # The same, on Ruby 4 (for apps that need it, and to test Dead Heat there).
+  dev4:
+    build:
+      context: .
+      dockerfile: docker/dev.Dockerfile
+      args:
+        RUBY_VERSION: "4.0"
+    profiles: [ruby4]
+    volumes:
+      - .:/deadheat
+      - bundle4:/usr/local/bundle
+    environment:
+      POSTGRES_HOST: postgres
+      MYSQL_HOST: mysql
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+
   postgres:
     image: postgres:17-alpine
     environment:
@@ -60,3 +80,4 @@ services:
 
 volumes:
   bundle:
+  bundle4:
