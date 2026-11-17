@@ -14,6 +14,7 @@ dir=/deadheat/bench/apps/$app
 cd "$dir"
 git checkout -q -- . && git clean -qfd spec/races test/races 2>/dev/null || true
 git checkout -q "$commit"
+if [ -f /deadheat/bench/historical/"$app"/setup.sh ]; then . /deadheat/bench/historical/"$app"/setup.sh; fi
 printf '\ngroup :test do\n  gem "deadheat", path: "/deadheat"\nend\n' >> Gemfile
 mkdir -p "$(dirname "$spec")"
 cp /deadheat/bench/historical/"$app"/*_race_spec.rb "$(dirname "$spec")"/ 2>/dev/null || true

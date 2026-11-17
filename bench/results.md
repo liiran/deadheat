@@ -89,10 +89,17 @@ for it. Measured with `bench/pauses_bench.rb` (100 tries per row):
 
 | Planted bug (SQLite) | Pauses off | Pauses on |
 | --- | --- | --- |
-| last item bought twice | 0% | 91% |
-| likes counter | 0% | 91% |
-| tag check-then-insert | 0% | 89% |
-| lost update in a service object | 0% | 89% |
+| last item bought twice | 0% | 75% |
+| likes counter | 0% | 76% |
+| tag check-then-insert | 0% | 77% |
+| lost update in a service object | 0% | 75% |
 
-The one real-world case where timing matters on a server database is Lobsters' `RecordInvalid` race
-(section 2): with no pauses or with only "meet" pauses it doesn't show; it took the stagger strategy.
+On a real bug on a server database, Lobsters' `RecordInvalid` race at `8d601f12d` (section 2), on
+MariaDB, 60 tries each:
+
+| | Pauses off | Pauses on |
+| --- | --- | --- |
+| Tries that showed the race | **0 of 60** | **11 of 60** |
+
+Without pauses, two requests that start together here never line up the way production traffic
+sometimes does. Starting one a few milliseconds later (the stagger strategy) is what exposes it.
