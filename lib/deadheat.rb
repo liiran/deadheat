@@ -75,4 +75,7 @@ module Deadheat
   end
 end
 
-require_relative "deadheat/railtie" if defined?(Rails::Railtie)
+if defined?(Rails::Railtie)
+  require_relative "deadheat/railtie"
+  require_relative "deadheat/engine"
+end

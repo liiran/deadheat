@@ -1,0 +1,8 @@
+#!/usr/bin/env ruby
+# Dead Heat: finds the bugs that only happen when two requests arrive at once.
+#   bin/deadheat sweep | scan | report      (bin/deadheat --help for more)
+require_relative "../config/boot"
+require "deadheat"
+require "deadheat/cli"
+
+exit Deadheat::CLI.start(ARGV)

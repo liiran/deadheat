@@ -74,6 +74,7 @@ module Deadheat
           actor: event.actor,
           at_ms: ((event.done - start) * 1000).round(1),
           kind: event.kind.to_s,
+          tables: event.tables,
           sql: event.sql,
           source: event.source,
           paused_ms: ((event.paused_after || event.paused_before || 0) * 1000).round,
