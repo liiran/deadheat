@@ -7,7 +7,8 @@ module Deadheat
     UNIQUE = "Add a unique index on the columns that must be unique (a model `validates uniqueness` can't stop two requests at once), then handle the conflict: `Model.create_or_find_by(…)` or `rescue ActiveRecord::RecordNotUnique`."
     IDEMPOTENT = "For repeated submissions (double clicks, retries, webhooks delivered twice), accept an idempotency key and store it with a unique index; a repeat then finds the first result instead of doing the work again."
     HANDLE_UNIQUE = "The database already stopped the duplicate, but the request crashed. Rescue `ActiveRecord::RecordNotUnique` (or use `create_or_find_by`) and reply as if the first request won."
-    DEADLOCK = "The database broke a deadlock by failing one request. Take row locks in the same order everywhere, or retry the transaction once on `ActiveRecord::Deadlocked`."
+    VALIDATION_RACE = "A uniqueness validation saw the other request's row and raised `ActiveRecord::RecordInvalid`, which `find_or_create_by!`/`create_or_find_by!` don't catch (they only catch `RecordNotUnique`). Let the unique index decide: drop the `validates … uniqueness` check for this path, or rescue `RecordInvalid` and look the row up again."
+    DEADLOCK ="The database broke a deadlock by failing one request. Take row locks in the same order everywhere, or retry the transaction once on `ActiveRecord::Deadlocked`."
     LOCK_TIMEOUT = "One request waited too long for a lock. Keep transactions short, and don't make outside calls while holding a row lock."
     SIDE_EFFECT = "Send the email, job or outside call only when this request actually changed the state: do it after the guarded update succeeds (or in `after_commit`), and record that it was sent under a unique index."
 
@@ -23,6 +24,7 @@ module Deadheat
       when :crash
         case error.to_s
         when /RecordNotUnique/ then [HANDLE_UNIQUE]
+        when /RecordInvalid/ then [VALIDATION_RACE, HANDLE_UNIQUE]
         when /Deadlock/ then [DEADLOCK]
         when /LockWaitTimeout|LockTimeout/ then [LOCK_TIMEOUT]
         else [LOCK]

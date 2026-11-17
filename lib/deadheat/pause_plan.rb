@@ -10,19 +10,23 @@ module Deadheat
   #            (at most max_pause), so all of them read before any of them writes.
   # - first:   whichever request makes that read first waits a fixed while, so another one reads,
   #            and maybe writes, in between.
-  # - random:  small random pauses after reads, for orderings the other two don't produce.
+  # - stagger: one request starts a little later, about when the other is writing, the way a double
+  #            click's second request really arrives. It catches code that only breaks when the first
+  #            request has just committed (a uniqueness validation that then sees the new row).
+  # - random:  small random pauses after reads, for orderings the others don't produce.
   #
   # The first try has no pauses at all.
   class PausePlan
     # What one actor does in one try. Keys look like "read:products#1" (the 1st read of products).
     class Schedule
-      attr_reader :description
+      attr_reader :description, :start_delay
 
-      def initialize(after_reads: {}, meet: nil, first: nil, jitter: nil, max_pause: 0.25)
+      def initialize(after_reads: {}, meet: nil, first: nil, jitter: nil, start_delay: nil, max_pause: 0.25)
         @after_reads = after_reads
         @meet = meet
         @first = first
         @jitter = jitter
+        @start_delay = start_delay
         @max_pause = max_pause
       end
 
@@ -79,18 +83,30 @@ module Deadheat
 
       k = number - 1
       rng = Random.new(seed * 1_000 + number)
-      # meet, first-waits, meet at the next gap, first-waits longer at the next gap, random
-      round = k / 5
-      case k % 5
+      # meet, first-waits, stagger, meet at the next gap, first-waits longer at the next gap, random
+      round = k / 6
+      case k % 6
       when 0 then meet(count, round * 2)
       when 1 then first_waits(count, round * 2, rng, 1)
-      when 2 then meet(count, round * 2 + 1)
-      when 3 then first_waits(count, round * 2 + 1, rng, 3)
+      when 2 then stagger(count, rng, round)
+      when 3 then meet(count, round * 2 + 1)
+      when 4 then first_waits(count, round * 2 + 1, rng, 3)
       else jitter(rng, count)
       end
     end
 
     private
+
+    # One request (taking turns) starts later, landing somewhere around the other's first write.
+    def stagger(count, rng, round)
+      late = (round + 1) % count
+      leader = @timelines[(late + 1) % count]
+      write_at = leader.find { |step| step.kind == :write }&.offset || leader.last&.offset.to_f
+      delay = (write_at * rng.rand(0.6..1.6) + rng.rand(0.0..0.004)).clamp(0.001, @max_pause)
+      schedules = Array.new(count)
+      schedules[late] = Schedule.new(start_delay: delay, max_pause: @max_pause)
+      [schedules, "request #{late + 1} starts #{(delay * 1000).round(1)} ms later"]
+    end
 
     # Whichever request makes the read first waits a while, long enough for another to read (and
     # perhaps write) in between.

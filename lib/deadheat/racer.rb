@@ -24,6 +24,8 @@ module Deadheat
           begin
             limit_lock_waits(lock_timeout)
             barrier&.wait(timeout)
+            delay = actor.schedule&.start_delay
+            sleep(delay) if delay
             actor.t0 = Deadheat.now
             actor.response = actor.block.call
           rescue Exception => e # rubocop:disable Lint/RescueException -- assertions and app errors are results here
