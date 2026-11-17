@@ -70,10 +70,12 @@ module Deadheat
     end
 
     class << self
+      # Replaces ids of rows this run created ("/orders/42" → "/orders/:new"). Only whole numbers count:
+      # the 3 in "username3" is part of a name, not an id.
       def mask(text, ids)
         return text if ids.empty?
 
-        text.to_s.gsub(/\d+/) { |digits| ids.include?(digits) ? ":new" : digits }
+        text.to_s.gsub(/(?<![A-Za-z0-9_])\d+(?![A-Za-z0-9_])/) { |digits| ids.include?(digits) ? ":new" : digits }
       end
 
       private

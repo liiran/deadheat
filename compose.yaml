@@ -45,5 +45,18 @@ services:
       interval: 1s
       retries: 60
 
+  # For real apps in bench/ that run on MariaDB (Lobsters). Start it with --profile apps.
+  mariadb:
+    image: mariadb:11.4
+    profiles: [apps]
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+    command: --innodb-flush-log-at-trx-commit=0 --skip-log-bin --max-connections=200
+    tmpfs: /var/lib/mysql
+    healthcheck:
+      test: healthcheck.sh --connect --innodb_initialized
+      interval: 1s
+      retries: 60
+
 volumes:
   bundle:

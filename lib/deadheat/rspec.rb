@@ -42,5 +42,7 @@ module Deadheat
 end
 
 ::RSpec.configure do |config|
+  # Race specs run outside DatabaseCleaner's transaction; Dead Heat restores the tables itself.
+  config.around(:each, type: :race) { |example| Deadheat::DatabaseCleanerPause.pause { example.run } }
   config.include Deadheat::RSpec::ExampleGroup, type: :race
 end

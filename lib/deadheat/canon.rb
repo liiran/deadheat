@@ -14,6 +14,8 @@ module Deadheat
       end
     end
 
+    TIME_IN_TEXT = /\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:\s?(?:Z|UTC|[+-]\d{2}:?\d{2}))?/
+
     attr_reader :tables, :new_ids, :added_rows, :after
 
     # ignore: a Set of "table.column" and "table.*" strings.
@@ -86,20 +88,40 @@ module Deadheat
       lines
     end
 
-    # Numeric values that ended below zero: [table, key, column, value].
-    def negative_values
+    # Numeric values that ended below zero where the expected run kept them at zero or above:
+    # [table, key, column, value]. Columns that are negative by design (a ranking score, say) stay
+    # negative one at a time too, so they never count.
+    def negative_values(expected = nil)
       found = []
       tables.each do |table, change|
         change.changed.each do |key, columns|
-          columns.each do |column, _old, new|
-            found << [table, key, column, new] if new.is_a?(Numeric) && new.negative?
+          columns.each do |column, old, new|
+            next unless new.is_a?(Numeric) && new.negative?
+            next if old.is_a?(Numeric) && old.negative?
+            next if expected && expected.final_value(table, key, column).then { |v| v.is_a?(Numeric) && v.negative? }
+
+            found << [table, key, column, new]
           end
         end
         change.added.each do |row|
-          row.each { |column, value| found << [table, nil, column, value] if value.is_a?(Numeric) && value.negative? }
+          row.each do |column, value|
+            next unless value.is_a?(Numeric) && value.negative?
+            next if expected && expected.added_values(table, column).any? { |v| v.is_a?(Numeric) && v.negative? }
+
+            found << [table, nil, column, value]
+          end
         end
       end
       found
+    end
+
+    # The value a changed row's column ended with (nil if this run didn't change it).
+    def final_value(table, key, column)
+      tables[table]&.changed&.to_h&.dig(key)&.find { |name, *| name == column }&.last
+    end
+
+    def added_values(table, column)
+      (tables[table]&.added || []).filter_map { |row| row.to_h[column] }
     end
 
     def added_count(table)
@@ -218,6 +240,10 @@ module Deadheat
       when String
         return "(#{value.bytesize} bytes #{Digest::SHA1.hexdigest(value)[0, 8]})" if value.encoding == Encoding::BINARY && !value.ascii_only?
         return BigDecimal(value) if @schema.numeric_column?(table, column) && value.match?(/\A-?\d+(\.\d+)?\z/)
+
+        # A time written into text ("used at 2026-11-17 04:06:41") differs between runs just like a
+        # timestamp column does, so it's compared the same way: present, not its value.
+        value = value.gsub(TIME_IN_TEXT, "(time)")
         return value.gsub(/(?<!\d)#{Regexp.escape(own_id.to_s)}(?!\d)/, "‹own id›") if own_id.is_a?(Integer) && own_id > 9
 
         value

@@ -18,6 +18,18 @@ module Deadheat
   class RaceTest < ActionDispatch::IntegrationTest
     self.use_transactional_tests = false
 
+    # If the app uses DatabaseCleaner, it steps aside for race tests; Dead Heat restores the tables.
+    def before_setup
+      DatabaseCleanerPause.start_pause
+      super
+    end
+
+    def after_teardown
+      super
+    ensure
+      DatabaseCleanerPause.stop_pause
+    end
+
     class << self
       def race(name, tries: nil, &definition)
         location = caller_locations(1, 1).first

@@ -11,3 +11,9 @@ gem "tzinfo-data", platforms: %i[windows jruby]
 group :development, :test do
   gem "deadheat", path: ".."
 end
+
+# The tools Rails developers already use for data integrity, for bench/tools_bench.rb.
+group :development do
+  gem "database_consistency", require: false
+  gem "active_record_doctor"
+end

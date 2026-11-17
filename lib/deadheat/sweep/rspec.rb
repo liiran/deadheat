@@ -17,7 +17,11 @@ RSpec.configure do |config|
       name: example.full_description, context: self, framework: "rspec"
     )
     begin
-      example.run
+      if Deadheat::Sweep.mode == "race"
+        Deadheat::DatabaseCleanerPause.pause { example.run }
+      else
+        example.run
+      end
     ensure
       Deadheat::Sweep.end_test
     end

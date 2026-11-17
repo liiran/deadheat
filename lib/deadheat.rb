@@ -49,6 +49,7 @@ module Deadheat
   autoload :Ping, "deadheat/ping"
   autoload :Format, "deadheat/format"
   autoload :Sweep, "deadheat/sweep"
+  autoload :DatabaseCleanerPause, "deadheat/database_cleaner"
 
   class << self
     def config

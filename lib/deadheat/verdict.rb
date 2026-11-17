@@ -94,7 +94,7 @@ module Deadheat
 
       # A balance or stock below zero is the most telling sign, so it names the finding even when
       # extra rows were made too (those are still listed underneath).
-      negative = (@outcome.canon.negative_values - expected.canon.negative_values).first
+      negative = @outcome.canon.negative_values(expected.canon).first
       if negative
         t, key, column, value = negative
         return set(:race, :below_zero, "Went below zero: #{t}#{" ##{key}" if key} #{column} ended at #{show(value)}", expected)
@@ -170,6 +170,19 @@ module Deadheat
             next unless their_delta.abs > mine_delta.abs
 
             return "Lost update: #{table} ##{key} #{column} went #{show(old)} → #{show(new)}, one at a time #{show(theirs[1])} → #{show(theirs[2])}"
+          end
+        end
+        # A counter in a row this run created (an upsert-style counter that starts at 1).
+        theirs = expected.canon.tables[table]
+        next unless theirs && theirs.added.size == change.added.size
+
+        change.added.zip(theirs.added).each do |mine, other|
+          other = other.to_h
+          mine.each do |column, value|
+            want = other[column]
+            next unless value.is_a?(Numeric) && want.is_a?(Numeric) && value.abs < want.abs
+
+            return "Lost update: a new #{table} row's #{column} is #{show(value)}, one at a time #{show(want)}"
           end
         end
       end
