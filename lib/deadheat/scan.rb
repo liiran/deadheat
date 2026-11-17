@@ -214,6 +214,7 @@ module Deadheat
         return unless body
 
         @locked = locked_variables(body)
+        @assigned = assigned_lookups(body)
         checks = []
         writes = []
         walk_with_locks(body) do |node, in_lock|
@@ -237,10 +238,14 @@ module Deadheat
 
         reported = Set.new
         checks.each do |check|
-          next if check[:in_lock] || @locked.include?(check[:var])
+          next if check[:in_lock] || (check[:var] && @locked.include?(check[:var]))
 
-          write = writes.find { |w| w[:line] > check[:line] && !w[:in_lock] && w[:vars].include?(check[:var]) && !w[:atomic_guard] }
-          next unless write && reported.add?([check[:var], write[:line]])
+          write = writes.find do |w|
+            next false if w[:line] <= check[:line] || w[:in_lock] || w[:atomic_guard]
+
+            (check[:var] && w[:vars].include?(check[:var])) || (check[:model] && w[:models]&.include?(check[:model]))
+          end
+          next unless write && reported.add?([check[:var] || check[:model], write[:line]])
 
           what = check[:count] ? "`#{check[:text]}` is counted" : "`#{check[:text]}` is checked"
           add(:check_then_act, check[:line], "#{what} on line #{check[:line]}, then #{write[:what]} on line #{write[:line]}, with no lock in between. Two requests can both pass the check.", defn.name)
@@ -257,6 +262,22 @@ module Deadheat
         node.compact_child_nodes.each do |child|
           walk_with_locks(child, in_lock || (lock_here && child.equal?(node.block)), &block)
         end
+      end
+
+      # Local variables holding a count or lookup on a model: { "taken" => { model: "Ticket", … } }.
+      def assigned_lookups(body)
+        found = {}
+        walk(body) do |node|
+          next unless node.is_a?(Prism::LocalVariableWriteNode) && node.value.is_a?(Prism::CallNode)
+
+          kind, root = root_of(node.value)
+          names = chain_names(node.value)
+          next unless kind == :const && names.any? { |name| COUNTS.include?(name) || FINDS.include?(name) || name == :where }
+          next if names.include?(:lock)
+
+          found[node.name.to_s] = { model: root, text: node.value.slice, count: names.any? { |name| COUNTS.include?(name) } }
+        end
+        found
       end
 
       # Variables loaded with a lock (`Model.lock.find`, `x.lock!`) count as protected.
@@ -282,16 +303,24 @@ module Deadheat
         return found if guarded
 
         walk(predicate) do |node|
+          # A variable that holds a count or lookup from earlier: `taken = Ticket.where(…).count`.
+          if node.is_a?(Prism::LocalVariableReadNode) && (held = @assigned[node.name.to_s])
+            found << { var: nil, model: held[:model], line: node.location.start_line, text: "#{node.name} = #{held[:text]}", count: held[:count] }
+            next
+          end
           next unless node.is_a?(Prism::CallNode)
 
-          chain = chain_of(node)
-          var = chain.first.is_a?(String) ? chain.first : nil
-          names = chain.drop(1)
-          next unless var && names.any? && names.none? { |name| name.to_s.end_with?("!", "=") || WRITES.include?(name) }
+          kind, root = root_of(node)
+          names = chain_names(node).reverse
+          next unless root && names.any? && names.none? { |name| name.to_s.end_with?("!", "=") || WRITES.include?(name) }
           next if names == [:id]
 
           count = names.any? { |name| COUNTS.include?(name) }
-          found << { var: var, line: node.location.start_line, text: node.slice, count: count }
+          if kind == :var
+            found << { var: root, line: node.location.start_line, text: node.slice, count: count }
+          elsif names.any? { |name| COUNTS.include?(name) || FINDS.include?(name) || name == :where }
+            found << { var: nil, model: root, line: node.location.start_line, text: node.slice, count: count }
+          end
         end
         found.uniq { |read| [read[:var], read[:line]] }
       end
@@ -309,9 +338,12 @@ module Deadheat
         chain = chain_names(node)
         if CREATES.include?(node.name) && (node.receiver.is_a?(Prism::ConstantReadNode) || node.receiver.is_a?(Prism::ConstantPathNode) || association?(node.receiver))
           vars = argument_variables(node) + [variable(root_receiver(node))].compact
-          model = constant_name(root_receiver(node)) || node.receiver.slice
+          constant = constant_name(root_receiver(node))
+          model = constant || node.receiver.slice
           article = model.to_s.match?(/\A[AEIOU]/i) ? "an" : "a"
-          return { vars: vars.uniq, line: node.location.start_line, what: "#{article} #{model} is created" } if vars.any?
+          if vars.any? || constant
+            return { vars: vars.uniq, models: [constant].compact, line: node.location.start_line, what: "#{article} #{model} is created" }
+          end
         end
         if node.name == :update_all
           return { vars: [], line: node.location.start_line, what: "rows are updated", atomic_guard: chain.include?(:where) }
@@ -490,6 +522,14 @@ module Deadheat
         end
         root = variable(current) || constant_name(current)
         root ? [root, *parts] : parts
+      end
+
+      # [:var, "product"] or [:const, "Ticket"] for the start of a call chain, or nil.
+      def root_of(node)
+        root = root_receiver(node)
+        if (name = variable(root)) then [:var, name]
+        elsif (name = constant_name(root)) then [:const, name]
+        end
       end
 
       def chain_names(node)

@@ -7,11 +7,7 @@ module Deadheat
   # answers requests from this computer.
   class Engine < ::Rails::Engine
     isolate_namespace Deadheat
-
-    routes.draw do
-      root to: "reports#show"
-      get "runs/:id", to: "reports#show", as: :run, constraints: { id: /[\w-]+/ }
-    end
+    # Routes are in config/routes.rb at the gem's root: Rails reloads engine routes from there.
   end
 
   class ReportsController < ActionController::Base

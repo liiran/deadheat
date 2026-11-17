@@ -41,6 +41,24 @@ class ScanTest < Minitest::Test
     assert_match(/is counted on line 3, then a Ticket is created on line 4/, suspect.message)
   end
 
+  def test_a_count_kept_in_a_variable
+    code = <<~RUBY
+      def claim
+        taken = Ticket.where(event: params[:event]).count
+        return head(:conflict) if taken >= 1
+        Ticket.create!(event: params[:event], seat: taken + 1)
+      end
+    RUBY
+    suspect = scan(code).first
+    assert_equal :check_then_act, suspect&.rule
+    assert_match(/`taken = Ticket.where\(event: params\[:event\]\).count` is counted on line 3, then a Ticket is created on line 4/, suspect.message)
+  end
+
+  def test_exists_then_create_on_the_model
+    code = "def tag\n  unless Tagging.exists?(post_id: 1, tag: 'x')\n    Tagging.create!(post_id: 1, tag: 'x')\n  end\nend\n"
+    assert_equal [:check_then_act], rules(code)
+  end
+
   def test_with_lock_is_safe
     code = <<~RUBY
       def buy
