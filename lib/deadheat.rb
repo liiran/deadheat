@@ -48,6 +48,7 @@ module Deadheat
   autoload :Results, "deadheat/results"
   autoload :Ping, "deadheat/ping"
   autoload :Format, "deadheat/format"
+  autoload :Sweep, "deadheat/sweep"
 
   class << self
     def config

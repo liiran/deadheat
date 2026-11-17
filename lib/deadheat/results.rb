@@ -14,11 +14,11 @@ module Deadheat
       File.join(Deadheat.config.results_path, "runs", run_id)
     end
 
-    def save(result)
+    def save(result, extra: {})
       FileUtils.mkdir_p(dir)
-      slug = result.name.to_s.parameterize.presence || "race"
+      slug = result.name.to_s.parameterize.first(60).delete_suffix("-").presence || "race"
       path = File.join(dir, "#{slug}-#{SecureRandom.hex(3)}.json")
-      File.write(path, JSON.pretty_generate(result.to_h))
+      File.write(path, JSON.pretty_generate(result.to_h.merge(extra)))
       path
     rescue SystemCallError => e
       warn "Dead Heat couldn't save its result: #{e.message}"

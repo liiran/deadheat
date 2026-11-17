@@ -35,6 +35,9 @@ module Deadheat
       return Prepared.new(spec, nil, nil) unless spec[:http]
 
       session = @context.open_session
+      session.integration_session.host = spec[:host] if spec[:host]
+      session.integration_session.https!(spec[:https]) unless spec[:https].nil?
+      mock(session).cookie_jar = spec[:cookies].dup if spec[:cookies]
       user = spec[:user]
       user = @context.instance_exec(&user) if user.respond_to?(:call) # sign_in: -> { @alice }, after setup
       sign_in(session, user) if user

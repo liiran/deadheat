@@ -45,7 +45,7 @@ module Deadheat
       @try_timeout = 15.0
       @lock_timeout = 5
       @seed = ENV["DEADHEAT_SEED"]&.to_i
-      @results_dir = nil
+      @results_dir = ENV["DEADHEAT_RESULTS_DIR"]
       @pauses = ENV["DEADHEAT_PAUSES"] != "0"
       @ignored_tables = DEFAULT_IGNORED_TABLES.dup
       @ignored_columns = { "*" => DEFAULT_IGNORED_COLUMNS.dup }

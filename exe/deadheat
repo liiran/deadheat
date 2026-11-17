@@ -1,1 +1,7 @@
 #!/usr/bin/env ruby
+# Finds the bugs in a Rails app that only happen when two requests arrive at once.
+# Run `deadheat --help` from the app's root folder.
+require "deadheat"
+require "deadheat/cli"
+
+exit Deadheat::CLI.start(ARGV)

@@ -12,6 +12,14 @@ module Deadheat
       end
     end
 
+    # While `deadheat sweep` runs the tests, watch every integration test and request spec.
+    initializer "deadheat.sweep" do
+      next unless Rails.env.test? && %w[record race].include?(ENV["DEADHEAT_SWEEP"])
+
+      ActiveSupport.on_load(:action_dispatch_integration_test) { require "deadheat/sweep/minitest" }
+      require "deadheat/sweep/rspec" if defined?(::RSpec::Core)
+    end
+
     rake_tasks do
       load File.expand_path("tasks/deadheat.rake", __dir__) if File.exist?(File.expand_path("tasks/deadheat.rake", __dir__))
     end

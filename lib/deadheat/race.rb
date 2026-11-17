@@ -26,7 +26,9 @@ module Deadheat
       #   r.as(users(:alice)) { post … }                signed in as that user
       #   r.as(:alice, sign_in: users(:alice)) { … }    both
       #   r.as(:alice, sign_in: -> { @alice }) { … }    a user made in r.setup
-      def as(who = nil, sign_in: nil, &block)
+      #
+      # cookies:, host: and https: start the session from an existing one (the sweep uses this).
+      def as(who = nil, sign_in: nil, cookies: nil, host: nil, https: nil, &block)
         raise ArgumentError, "r.as needs a block with the request(s) to send" unless block
 
         user = sign_in || (who if who.is_a?(ActiveRecord::Base))
@@ -35,12 +37,14 @@ module Deadheat
                 when ActiveRecord::Base then Sessions.label_for(who)
                 else "request #{@actors.size + 1}"
                 end
-        @actors << { label: unique(label), user: user, block: block, http: true }
+        @actors << { label: unique(label), user: user, block: block, http: true, cookies: cookies, host: host, https: https }
       end
 
       # The same request sent twice at once: a double click, a retry, a webhook delivered twice.
-      def twice(who = nil, sign_in: nil, &block)
-        2.times { as(who, sign_in: sign_in, &block) }
+      def twice(who = nil, **options, &block)
+        base = who.is_a?(Symbol) || who.is_a?(String) ? who.to_s : "request"
+        user = options.delete(:sign_in) || (who if who.is_a?(ActiveRecord::Base))
+        [1, 2].each { |n| as("#{base} #{n}", sign_in: user, **options, &block) }
         @identical = true
       end
 
@@ -93,7 +97,7 @@ module Deadheat
       @schema = Schema.new(connection)
       @seed = @config.seed_for_run
 
-      Writes.clear
+      Writes.clear unless Writes.tracking? # a sweep tracks the whole test, from before the race
       result = nil
       Writes.track do
         # Taken before anything of the race runs, so whatever it creates is cleaned up afterwards.

@@ -49,7 +49,7 @@ module Deadheat
       {
         name: name, location: location, database: database, tries: tries, counts: counts, seed: seed,
         passed: passed?, irreversible: irreversible?, seconds: seconds, actors: actors,
-        expected: expected, warnings: warnings, reproduce: reproduce, log: log,
+        expected: expected, warnings: warnings, reproduce: reproduce, log: log, message: failure_message,
         findings: findings.map(&:to_h)
       }
     end

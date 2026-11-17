@@ -1,0 +1,27 @@
+# Corner Store runs on SQLite by default. DB=postgres or DB=mysql switches it (the Docker setup in
+# the repo's compose.yaml provides both).
+<% db = ENV.fetch("DB", "sqlite") %>
+default: &default
+<% if db == "postgres" %>
+  adapter: postgresql
+  host: <%= ENV.fetch("POSTGRES_HOST", "localhost") %>
+  username: postgres
+  password: postgres
+<% elsif db == "mysql" %>
+  adapter: mysql2
+  host: <%= ENV.fetch("MYSQL_HOST", "127.0.0.1") %>
+  username: root
+  password: root
+<% else %>
+  adapter: sqlite3
+  timeout: 5000
+<% end %>
+  max_connections: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+
+development:
+  <<: *default
+  database: <%= db == "sqlite" ? "storage/development.sqlite3" : "corner_store_development" %>
+
+test:
+  <<: *default
+  database: <%= db == "sqlite" ? "storage/test.sqlite3" : "corner_store_test" %>

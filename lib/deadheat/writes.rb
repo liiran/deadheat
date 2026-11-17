@@ -1,16 +1,24 @@
 module Deadheat
-  # Which tables were written while a race was running, in any thread. Between tries only these are
-  # put back the way they were.
+  # Which tables were written while Dead Heat was watching, in any thread. Only these need to be put
+  # back the way they were.
   module Writes
     @tables = Concurrent::Set.new
     @depth = Concurrent::AtomicFixnum.new(0)
 
     class << self
       def track
-        @depth.increment
+        start
         yield
       ensure
-        @depth.decrement
+        stop
+      end
+
+      def start
+        @depth.increment
+      end
+
+      def stop
+        @depth.decrement if @depth.value.positive?
       end
 
       def tracking?

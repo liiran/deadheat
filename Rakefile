@@ -21,3 +21,13 @@ task :test do
 end
 
 task default: :test
+
+desc "Sweep the Corner Store demo app end to end (slow; DB=postgres for one database)"
+task "test:sweep" do
+  databases = ENV["DB"] ? [ENV["DB"]] : DATABASES
+  failed = databases.reject do |db|
+    puts "\n== sweep on #{db}"
+    system({ "DB" => db }, Gem.ruby, "test/sweep/demo_sweep_test.rb")
+  end
+  abort "Sweep test failed on: #{failed.join(', ')}" if failed.any?
+end

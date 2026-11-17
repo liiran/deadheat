@@ -11,7 +11,7 @@ module Deadheat
   class Verdict
     STATUSES = %i[ok differs protected crash race].freeze
 
-    attr_reader :status, :kind, :title, :lines, :irreversible, :expected
+    attr_reader :status, :kind, :title, :lines, :irreversible, :expected, :table
 
     def self.judge(outcome, serial:, singles:, schema:)
       new(outcome, serial, singles, schema).tap(&:decide)
@@ -87,19 +87,25 @@ module Deadheat
       end
 
       duplicate = duplicate_despite_rule(expected)
-      return set(:race, :duplicate_rule, duplicate, expected) if duplicate
-
-      table = more_rows_table(expected)
-      if table
-        have = @outcome.canon.added_count(table)
-        want = expected.canon.added_count(table)
-        return set(:race, :made_twice, "Made twice: #{have} new #{table} where one at a time there #{want == 1 ? 'is' : 'are'} #{want}", expected)
+      if duplicate
+        @table = duplicate.last
+        return set(:race, :duplicate_rule, duplicate.first, expected)
       end
 
+      # A balance or stock below zero is the most telling sign, so it names the finding even when
+      # extra rows were made too (those are still listed underneath).
       negative = (@outcome.canon.negative_values - expected.canon.negative_values).first
       if negative
         t, key, column, value = negative
         return set(:race, :below_zero, "Went below zero: #{t}#{" ##{key}" if key} #{column} ended at #{show(value)}", expected)
+      end
+
+      table = more_rows_table(expected)
+      if table
+        @table = table
+        have = @outcome.canon.added_count(table)
+        want = expected.canon.added_count(table)
+        return set(:race, :made_twice, "Made twice: #{have} new #{table} where one at a time there #{want == 1 ? 'is' : 'are'} #{want}", expected)
       end
 
       lost = lost_update(expected)
@@ -134,7 +140,7 @@ module Deadheat
           next if have.empty? || have.size <= duplicates(expected.after[table], rule).size
 
           values = rule[:columns].zip(have.first).map { |column, value| "#{column} “#{show(value)}”" }.join(" and ")
-          return "Duplicate despite a rule: 2 #{table} with the same #{values}, though the model says it must be unique"
+          return ["Duplicate despite a rule: 2 #{table} with the same #{values}, though the model says it must be unique", table]
         end
       end
       nil

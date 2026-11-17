@@ -13,3 +13,4 @@ Gemfile.lock
 /demo/storage/
 /bench/apps/
 /bench/out/
+/demo/test/races/
