@@ -8,20 +8,7 @@ require "deadheat/minitest"
 
 Deadheat.config.results_dir = File.expand_path("../tmp/deadheat", __dir__)
 
-# A fresh, empty database with the dummy app's schema, once per test process.
-db_config = ActiveRecord::Base.connection_db_config
-$stdout.then do |out|
-  $stdout = File.open(File::NULL, "w") # the database tasks print "already exists" and similar
-  ActiveRecord::Tasks::DatabaseTasks.create(db_config)
-  ActiveRecord::Tasks::DatabaseTasks.purge(db_config)
-ensure
-  $stdout = out
-end
-# Creating a database connects to the server's maintenance database; come back to the test one.
-ActiveRecord::Base.establish_connection(db_config)
-ActiveRecord::Schema.verbose = false
-load File.expand_path("dummy/db/schema.rb", __dir__)
-ActiveRecord::Base.connection_pool.internal_metadata.create_table_and_set_flags("test") if ActiveRecord::Base.connection_pool.respond_to?(:internal_metadata)
+require_relative "support/database"
 
 module RaceHelpers
   # Runs a race and returns its result, without failing the test, so the test can check what it found.

@@ -331,8 +331,8 @@ module Deadheat
     def reproduce_command
       return unless @location
 
-      file = @location.split(":").first.sub("#{Dir.pwd}/", "")
-      runner = file.start_with?("spec/") ? "bundle exec rspec" : "bin/rails test"
+      rspec = defined?(::RSpec::Core::ExampleGroup) && @context.is_a?(::RSpec::Core::ExampleGroup)
+      runner = rspec ? "bundle exec rspec" : "bin/rails test"
       "DEADHEAT_SEED=#{@seed} #{runner} #{@location.sub("#{Dir.pwd}/", '')}"
     end
   end

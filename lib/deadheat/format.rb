@@ -40,7 +40,7 @@ module Deadheat
       names = rows.map { |row| row[:actor].to_s }
       width = names.map(&:length).max.to_i
       lines = rows.first(limit).map do |row|
-        pause = row[:pause] ? "  (waited #{row[:paused_ms]} ms #{row[:pause]})" : ""
+        pause = row[:pause] && row[:paused_ms].positive? ? "  (waited #{row[:paused_ms]} ms #{row[:pause]})" : ""
         source = row[:source] ? "  #{row[:source]}" : ""
         format("%7.1f ms  %-#{width}s │ %s%s%s", row[:at_ms], row[:actor], row[:sql], source, pause)
       end

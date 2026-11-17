@@ -5,16 +5,16 @@ test:
   host: <%= ENV.fetch("POSTGRES_HOST", "localhost") %>
   username: postgres
   password: postgres
-  database: deadheat_test
+  database: <%= ENV.fetch("DEADHEAT_DB_NAME", "deadheat_test") %>
 <% elsif db == "mysql" || db == "trilogy" %>
   adapter: <%= db == "trilogy" ? "trilogy" : "mysql2" %>
   host: <%= ENV.fetch("MYSQL_HOST", "127.0.0.1") %>
   username: root
   password: root
-  database: deadheat_test
+  database: <%= ENV.fetch("DEADHEAT_DB_NAME", "deadheat_test") %>
 <% else %>
   adapter: sqlite3
-  database: <%= Rails.root.join("db/test.sqlite3") %>
+  database: <%= Rails.root.join("db/#{ENV.fetch("DEADHEAT_DB_NAME", "test")}.sqlite3") %>
   timeout: 5000
 <% end %>
   pool: 10
