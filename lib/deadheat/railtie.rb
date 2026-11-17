@@ -17,11 +17,9 @@ module Deadheat
       next unless Rails.env.test? && %w[record race].include?(ENV["DEADHEAT_SWEEP"])
 
       ActiveSupport.on_load(:action_dispatch_integration_test) { require "deadheat/sweep/minitest" }
-      require "deadheat/sweep/rspec" if defined?(::RSpec::Core)
+      # Only when RSpec itself is running (rspec-rails in the Gemfile alone loads part of it).
+      require "deadheat/sweep/rspec" if defined?(::RSpec) && ::RSpec.respond_to?(:configure)
     end
 
-    rake_tasks do
-      load File.expand_path("tasks/deadheat.rake", __dir__) if File.exist?(File.expand_path("tasks/deadheat.rake", __dir__))
-    end
   end
 end

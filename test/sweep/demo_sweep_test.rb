@@ -9,10 +9,10 @@ class DemoSweepTest < Minitest::Test
   DEMO = File.expand_path("../../demo", __dir__)
   DB = ENV.fetch("DB", "sqlite")
 
-  def sweep
+  def sweep(flags = "")
     # The demo has its own Gemfile; don't let this repo's Bundler settings leak into it.
     env = { "DB" => DB, "BUNDLE_GEMFILE" => File.join(DEMO, "Gemfile"), "RUBYOPT" => nil, "BUNDLE_BIN_PATH" => nil }
-    Open3.capture2e(env, "sh", "-c", "bin/rails db:create db:schema:load >/dev/null 2>&1; bin/deadheat sweep --no-tests --tries 10", chdir: DEMO)
+    Open3.capture2e(env, "sh", "-c", "bin/rails db:create db:schema:load >/dev/null 2>&1; bin/deadheat sweep --no-tests --tries 10 #{flags}", chdir: DEMO)
   end
 
   def test_finds_every_planted_race_and_no_fixed_one
@@ -33,5 +33,17 @@ class DemoSweepTest < Minitest::Test
     assert_empty fixed.reject { |r| r["status"] == "ok" }, "false alarms:\n#{output}"
     assert_operator shop.count { |r| r["irreversible"] }, :>=, 2, output
     assert summary.dig("coverage", "share").to_f > 0.7, summary["coverage"].inspect
+  end
+  def test_rspec_request_specs_too
+    output, status = sweep("--rspec")
+    assert_equal 1, status.exitstatus, output
+    latest = Dir[File.join(DEMO, "tmp/deadheat/runs/*/sweep.json")].max_by { |path| File.mtime(path) }
+    summary = JSON.parse(File.read(latest))
+    assert_equal "rspec", summary["framework"]
+    races = summary["results"].select { |r| r["status"] == "race" }.map { |r| r.dig("target", "route") }
+    fixed = summary["results"].select { |r| r.dig("target", "route").to_s.start_with?("/fixed") }
+    assert_equal 4, races.size, output
+    assert(races.none? { |route| route.start_with?("/fixed") }, output)
+    assert_equal 4, fixed.size, output
   end
 end

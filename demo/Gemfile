@@ -9,6 +9,7 @@ gem "bcrypt", "~> 3.1.7"
 gem "tzinfo-data", platforms: %i[windows jruby]
 
 group :development, :test do
+  gem "rspec-rails"
   gem "deadheat", path: ".."
 end
 
