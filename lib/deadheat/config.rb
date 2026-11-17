@@ -50,6 +50,7 @@ module Deadheat
       @ignored_tables = DEFAULT_IGNORED_TABLES.dup
       @ignored_columns = { "*" => DEFAULT_IGNORED_COLUMNS.dup }
       @sign_in_hook = nil
+      @reset_hooks = []
     end
 
     # ignore_tables "visits", "ahoy_events"
@@ -64,6 +65,17 @@ module Deadheat
         raise ArgumentError, "Write columns as \"table.column\", like \"users.last_seen_at\"" unless column
         (@ignored_columns[table] ||= []) << column
       end
+    end
+
+    # State outside the database to put back before every run, for every race and the sweep:
+    #   c.reset { Rails.cache.clear }
+    #   c.reset { Redis.new.flushdb }
+    def reset(&block)
+      @reset_hooks << block
+    end
+
+    def reset_hooks
+      @reset_hooks.dup
     end
 
     # How a test signs a user in. The block runs inside that user's own session, like a test body:

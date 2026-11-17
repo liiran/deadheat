@@ -78,6 +78,15 @@ services:
       interval: 1s
       retries: 60
 
+  # For real apps in bench/ that need Redis (Mastodon). Start it with --profile apps.
+  redis:
+    image: redis:8-alpine
+    profiles: [apps]
+    healthcheck:
+      test: redis-cli ping
+      interval: 1s
+      retries: 30
+
 volumes:
   bundle:
   bundle4:

@@ -10,6 +10,7 @@ RUN apt-get update -qq \
       default-libmysqlclient-dev libssl-dev \
       libsqlite3-dev sqlite3 \
       libyaml-dev zlib1g-dev libvips-dev \
+      libidn-dev libicu-dev \
  && rm -rf /var/lib/apt/lists/*
 
 ENV BUNDLE_JOBS=8 \

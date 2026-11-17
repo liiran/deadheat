@@ -20,6 +20,5 @@ module Deadheat
       # Only when RSpec itself is running (rspec-rails in the Gemfile alone loads part of it).
       require "deadheat/sweep/rspec" if defined?(::RSpec) && ::RSpec.respond_to?(:configure)
     end
-
   end
 end

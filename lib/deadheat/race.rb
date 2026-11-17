@@ -10,15 +10,23 @@ module Deadheat
   class Race
     # What the `race "…" do |r| … end` block describes.
     class Definition
-      attr_reader :setup_block, :actors, :checks, :tries_override
+      attr_reader :setup_block, :actors, :checks, :tries_override, :resets
 
       def initialize
         @actors = []
         @checks = []
+        @resets = []
       end
 
       def setup(&block)
         @setup_block = block
+      end
+
+      # State outside the database that must start the same every run (Redis keys, Rails.cache).
+      # Dead Heat restores the database itself; this block runs right after, before every run.
+      #   r.reset { Rails.cache.clear }
+      def reset(&block)
+        @resets << block
       end
 
       # An actor that sends requests in its own session:
@@ -126,6 +134,7 @@ module Deadheat
 
     def race(definition, tries, started)
       @checks = definition.checks
+      @resets = @config.reset_hooks + definition.resets
       @ignore = Set.new
       warnings = []
       names = @sessions.names
@@ -188,6 +197,7 @@ module Deadheat
     # what happened.
     def perform(order, schedules: nil, only: nil)
       @base.restore(Writes.tables)
+      @resets.each { |block| @context.instance_exec(&block) }
       actors = @sessions.actors
       actors.each_with_index { |actor, i| actor.schedule = schedules&.[](i) }
       effects = Effects.watch do
