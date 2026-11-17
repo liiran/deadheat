@@ -60,6 +60,29 @@ second request arrives just after the first one saved, the validation sees the n
 hit exactly this in production and fixed it four months later. Dead Heat's *stagger* strategy, which
 starts one request a few milliseconds late, finds it from the December commit.
 
+## 2b. Spree: the gift card overspend
+
+[Spree](https://github.com/spree/spree) fixed a "gift card overspend race condition vulnerability" in
+March 2026 (`1ce4d2404`). Two orders applying the same gift card at once could both take its whole
+balance. Spree's fix came with a spec that starts five threads by hand. The same check as a Dead Heat
+race test is [`historical/spree/gift_card_race_spec.rb`](historical/spree/gift_card_race_spec.rb): a
+100 card, two orders of 80 each, and the rule "never spend more than the card holds".
+
+```
+docker compose run --rm -e DEADHEAT_TRIES=40 dev sh bench/historical/spree/run.sh <commit>
+```
+
+| Commit | Dead Heat |
+| --- | --- |
+| `397173a1` (before the fix) | broke in **40 of 40** tries: the store credits added up to 160 on a 100 card |
+| `1ce4d240` (the fix) | **no race in 40 tries** |
+
+Dead Heat's scan, run on the code before the fix with no database, flags the cause:
+`gift_card.lock!` outside a transaction, which releases the lock right away.
+
+While setting this up, Dead Heat also found a second, unrelated race in the same service, which is
+still in Spree's code. Its details aren't published here.
+
 ## 3. Lobsters: sweeping the whole app with no setup
 
 **Lobsters at `7cc3c14ed`** (MariaDB, 97 request specs pass):

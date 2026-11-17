@@ -62,9 +62,24 @@ ten-line race test ([`bench/historical/lobsters`](bench/historical/lobsters)):
 | The December 2024 fix (`8d601f12d`) | still broke in **4–5 of 20**: the model's uniqueness validation raises `RecordInvalid`, which `find_or_create_by!` doesn't catch |
 | The fix that followed a production exception in April 2025 (`b664dccb`) | no race in **100** tries |
 
-So it would have caught the gap in the first fix four months before it reached production. A zero-setup
-sweep of today's Lobsters (its 171 request specs pass) also turned up races that are still in its code;
-details of unfixed races aren't published here.
+So it would have caught the gap in the first fix four months before it reached production.
+
+**Another real one.** [Spree](https://github.com/spree/spree) fixed a "gift card overspend race condition
+vulnerability" in March 2026. Two orders using one gift card at once could each take its whole balance.
+
+| Spree code | Dead Heat |
+| --- | --- |
+| Before the fix (`397173a1`) | broke in **40 of 40** tries (160 spent from a 100 card) |
+| The fix (`1ce4d240`) | no race in **40** tries |
+
+Dead Heat's scan points at the cause in the code before the fix: `gift_card.lock!` called outside a
+transaction, which releases the lock right away.
+
+**All together:** 3 of 3 real, fixed race bugs reproduced before their fixes, no race found after the
+fixes that worked, and the one fix that didn't work was caught. A zero-setup sweep of today's Lobsters
+(its 171 request specs pass), and the Spree race test, also turned up races that are still in their
+code. Details of unfixed races aren't published here. All of this is in [`bench/results.md`](bench/results.md), with the
+commands to rerun it.
 
 ## Quick start
 
@@ -79,14 +94,14 @@ Dead Heat sweep (Minitest)
 Recording the requests your tests make…
 Found 23 write requests in 31 tests. Checking 23 endpoints, 20 tries each…
 
-  ✗ POST /products/:product_id/buy     Made twice: 2 new orders where one at a time there is 1  20/20 tries  [irreversible]
-  ✗ POST /coupons/:code/redeem         Made twice: 2 new discounts where one at a time there is 1  20/20 tries
-  ✗ POST /wallet/withdraw              Went below zero: wallets #3 balance_cents ended at -3000  20/20 tries
-  ✗ POST /reviews/:id/helpful          Lost update: reviews #3 helpful_count went 0 → 1, one at a time 0 → 2  20/20 tries
+  ✗ POST /products/:product_id/buy     Made twice: 2 new orders where one at a time there is 1  18/20 tries  [irreversible]
+  ✗ POST /coupons/:code/redeem         Made twice: 2 new discounts where one at a time there is 1  19/20 tries
+  ✗ POST /wallet/withdraw              Went below zero: wallets #3 balance_cents ended at -3000  18/20 tries
+  ✗ POST /reviews/:id/helpful          Lost update: reviews #3 helpful_count went 0 → 1, one at a time 0 → 2  17/20 tries
   …
   ✓ 11 endpoints with no race found
 Checked 23 of the app's 28 write endpoints (82%) using its existing tests, with no setup.
-10 races found (2 with side effects that can't be undone) in 1m 14s.
+10 races found (2 with side effects that can't be undone) in 1m 15s.
 Regression tests written: test/races/sweep/post_products_product_id_buy_race_test.rb, …
 ```
 

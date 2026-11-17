@@ -8,6 +8,9 @@ RSpec.describe Spree::GiftCards::Apply, type: :race do
   race "two orders spend one gift card at once" do |r|
     r.setup do
       store = Spree::Store.default
+      # The store already takes store credit, as any store that has sold a gift card does, so this
+      # test measures only the gift card.
+      create(:store_credit_payment_method, stores: [store]) unless store.payment_methods.where(type: "Spree::PaymentMethod::StoreCredit").exists?
       @gift_card = create(:gift_card, amount: 100, store: store)
       @orders = Array.new(2) do
         order = create(:order, store: store, user: create(:user))
