@@ -159,7 +159,7 @@ docker compose --profile apps run --rm -e DEADHEAT_TRIES=20 dev sh bench/histori
 
 | Commit | Dead Heat |
 | --- | --- |
-| `f7bf804a` (before the fix) | broke in **15–18 of 20** tries (two runs): 2 statuses, the account's count up by 2 |
+| `f7bf804a` (before the fix) | broke in **15–17 of 20** tries (three runs): 2 statuses, the account's count up by 2 |
 | `cff25c18` (the fix: a Redis lock around the check) | **40 of 40** tries ok: the duplicate is gone |
 
 **A note on that fix.** At `cff25c18` the second post fails with `NoMethodError` even one at a time (each

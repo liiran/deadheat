@@ -306,7 +306,7 @@ twice. Its duplicate check is in Redis, so the race test clears Redis before eac
 
 | Mastodon code | Dead Heat |
 | --- | --- |
-| `f7bf804a`, before the fix | broke in **15–18 of 20** tries (the same post published twice) |
+| `f7bf804a`, before the fix | broke in **15–17 of 20** tries (the same post published twice) |
 | `cff25c18`, the fix | the duplicate is gone in **40 of 40** tries |
 
 At that fix the retried post fails with an error even one at a time, which Mastodon fixed seven months
@@ -390,6 +390,7 @@ It also refuses setups that would make its results wrong, and says what to chang
 - code reloading turned on
 - `allow_concurrency` off
 - the test still inside an open transaction
+- a test environment that really delivers email (each raced request runs about 25 times)
 
 If you use DatabaseCleaner, it steps aside for race tests and the tests the sweep chooses. When a race
 is over, every table is back as it was, and the database connections have their usual settings.
@@ -400,11 +401,16 @@ with an empty 204 and does nothing else; Dead Heat uses it to sign test users in
 your own computer, only in development and test, and only reads the results folder. Nothing is added in
 production.
 
+Two things to know about the dashboard. A development server inside a container sees your browser as
+another computer and answers 403; `DEADHEAT_DASHBOARD_ALLOW_REMOTE=1` turns the check off there. And a
+tunnel or port forward that adds no headers makes outside visitors look local, so don't put a
+development server that mounts it on the internet. `bin/deadheat report` gives the same page as a file.
+
 **What it writes, and where.** Everything stays on your computer. Dead Heat doesn't send anything
 anywhere and has no network code.
 
 - `tmp/deadheat/`: results as JSON, the test logs of a sweep, and `report.html`. The installer adds this
-  folder to `.gitignore`.
+  folder to `.gitignore`. Only the 30 newest runs are kept.
 - `test/races/sweep/` (or `spec/races/sweep/`): one regression test for each race a sweep finds. It
   never overwrites a file that's already there.
 
