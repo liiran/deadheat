@@ -8,9 +8,25 @@ Lobsters), Rails 8.1, PostgreSQL 17, MySQL 8.4, MariaDB 11.4 and SQLite 3.
 
 ## 1. Corner Store: Dead Heat against the tools Rails developers already use
 
-[`demo/`](../demo) is a small Rails 8 store with ten races planted in realistic features. Each feature
-has a fixed twin and an ordinary test, and all 32 of its tests pass. The question is how many of the ten
-each tool points at, and whether any tool raises an alarm on a fixed twin.
+To compare tools fairly you need an app where you know exactly where every race is, so
+[`demo/`](../demo) was built for this: a small Rails 8 store with ten races planted on purpose in
+realistic features (checkout, coupons, gift cards, webhooks…). Each feature has:
+
+- a **fixed twin**: the same feature with the race fixed. A tool that flags it is raising a false alarm.
+- an **ordinary test**, the kind any app has. All 32 tests pass, even though ten features are broken,
+  because each test sends one request at a time.
+
+The question is how many of the ten each tool points at, and whether it flags any fixed twin. The tools:
+
+- **The app's own tests:** the 32 ordinary tests above.
+- **database_consistency** and **active_record_doctor:** popular gems that compare an app's models with
+  its database schema, for example "this model validates that emails are unique, but the table has no
+  unique index on email".
+- **Dead Heat scan:** reads the code, without running it, for the shapes races take (see the README).
+- **Dead Heat sweep:** runs each request from the tests twice at the same moment and compares the
+  result with running it twice one after the other.
+
+Each runs on all three databases because they handle simultaneous writes differently.
 
 ```
 docker compose run --rm -e DB=postgres dev ruby bench/tools_bench.rb
@@ -24,12 +40,21 @@ docker compose run --rm -e DB=postgres dev ruby bench/tools_bench.rb
 | Dead Heat scan | 10 / 10 | 10 / 10 | 10 / 10 | 0 | 13 |
 | **Dead Heat sweep** | **10 / 10** | **10 / 10** | **9 / 10** | **0** | 10 |
 
+- **The app's own tests: 0.** Not because they're broken: one request at a time can't race.
 - **What the two tools catch:** only the race that is a uniqueness validation without a unique index
-  (the newsletter). That's the only kind they check for. Most of their messages are about other
-  things (`NOT NULL` without a presence validator, missing `dependent:` options).
+  (the newsletter). That's the only race-related thing they check. The other nine races are in
+  controller code, which they don't read. Most of their messages are about other things (`NOT NULL`
+  without a presence validator, missing `dependent:` options). They read models and schema, not timing,
+  so their result is the same on every database.
 - **How the matching was scored:** each of their messages was counted only when it was about uniqueness.
-- **SQLite:** Rails 8 runs SQLite writes with `BEGIN IMMEDIATE`, so the newsletter's validate-then-insert,
-  done inside one transaction, really can't race there. The sweep is right not to report it.
+- **The scan's 10 of 10 should be read with care:** the planted races and the scan's rules were written
+  by the same person. The sweep has no such advantage, since it only compares results; the real apps in
+  sections 2 and 3 are the fairer test.
+- **"Messages printed"** is how much each tool prints in total, a measure of how much there is to read.
+- **SQLite: 9 is the right answer.** Rails 8 starts each SQLite write transaction with `BEGIN IMMEDIATE`,
+  which takes the database's write lock straight away, so a second signup waits until the first has
+  finished. The newsletter's check-then-insert really can't race there, and the sweep is right not to
+  report it.
 - **Irreversible:** two of the ten races sent something that can't be taken back. One was a second
   order confirmation email (a queued `OrderMailer` job); the other was a second `ShipOrderJob`.
 - **Coverage:** the sweep reached 23 of the app's 28 write endpoints (82%) from its existing tests. The

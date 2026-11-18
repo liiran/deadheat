@@ -22,39 +22,82 @@ writes a test so the bug can't come back.
 
 ## What it finds
 
-| | Example | One at a time | Two at once |
-| --- | --- | --- | --- |
-| Made twice | Double-click "Place order" | 1 order, then "already placed" | 2 orders, card charged twice |
-| Used twice | One-use coupon | 1 discount, then "already used" | 2 discounts |
-| Below zero | Gift card, wallet, stock | stops at 0 | goes below 0 |
-| Lost update | Two people like a post | likes = 2 | likes = 1 |
-| Duplicate despite a rule | `validates :email, uniqueness: true` | 1 account, then "taken" | 2 accounts |
-| Crash | A unique index the code doesn't handle | second request handled | second request gets a 500 |
-| Sent twice | Confirmation email, shipping job, payment call | sent once | sent twice (marked *irreversible*) |
+A race needs two things: a request that **reads** something, decides, and then **writes**, and a second
+request that slips in between the read and the write. Almost every race in a web app has one of three
+shapes.
+
+### 1. Check, then act
+
+The code checks a condition, then acts on it: *is there stock left? Then sell. Is this coupon unused?
+Then apply it. Has this order been paid yet? If not, ship it.*
+
+```ruby
+coupon = Coupon.find_by!(code: params[:code])
+return render(plain: "Already used", status: :unprocessable_entity) if coupon.used_at
+
+Discount.create!(user: Current.user, coupon: coupon)
+coupon.update!(used_at: Time.current)
+```
+
+Both requests pass the check before either one marks the coupon used, so both get the discount. The
+same shape oversells the last item, takes a gift card or wallet below zero, sells an event past
+capacity, and processes a payment webhook twice.
+
+**Fix:** lock the row while deciding (`coupon.with_lock { … }`), or let the database check and change
+in one statement: `Coupon.where(id: coupon.id, used_at: nil).update_all(used_at: Time.current) == 1`.
+
+### 2. Read, add in Ruby, save
+
+```ruby
+review.update!(helpful_count: review.helpful_count + 1)
+```
+
+Both requests read 0, both add one in Ruby, both save 1. Nothing crashes and nothing looks wrong, but one
+vote is gone. This is called a *lost update*.
+
+**Fix:** let the database do the arithmetic: `Review.update_counters(review.id, helpful_count: 1)`.
+
+### 3. Look, then create
+
+```ruby
+Follow.find_by(user: user, store: store) || Follow.create!(user: user, store: store)
+```
+
+Both requests look, find nothing, and both create one. `validates :email, uniqueness: true` is the same
+shape hidden inside Rails: it looks for the email, then inserts. If a unique index catches the duplicate,
+the second request doesn't make a copy, but it does crash with `RecordNotUnique`, and the user sees an
+error page.
+
+**Fix:** a unique index, plus `create_or_find_by!` or a `rescue ActiveRecord::RecordNotUnique`.
+
+### Any of them can send something twice
+
+When the action also sends an email, queues a job or calls an outside service (a payment, a shipment),
+the duplicate goes out too. A duplicate row can be deleted, but a sent email or a second charge can't be
+taken back, so Dead Heat marks these races **irreversible**.
+
+### How Dead Heat finds them
+
+- **Running the code doesn't need to know the shapes.** The sweep and race tests send requests at the
+  same moment and check whether the result could have come from sending them one after the other. That
+  catches a race whatever its shape, even when the check isn't in the database (Mastodon's, below, was in
+  Redis). They report what they saw: *made twice*, *went below zero*, *lost update*, *crash*, *sent
+  twice*, or *different result*.
+- **The scan looks for the shapes.** It reads the code without running anything and lists each of the
+  three shapes that no lock or unique index protects, plus locks that protect nothing. These are
+  suspects, not proof. It takes seconds, and it's the only way to check code that no test reaches.
 
 ## Results
 
-**Against the tools Rails developers already use.** Corner Store (in [`demo/`](demo)) is a small Rails 8
-store with ten realistic races planted in it, a fixed twin for each, and an ordinary passing test for
-every feature. Each tool ran on the same code ([`bench/tools_bench.rb`](bench/tools_bench.rb)):
+### Real race bugs that real apps fixed
 
-| Tool | Planted races caught | False alarms on the fixed twins |
-| --- | --- | --- |
-| The app's own tests | 0 of 10 | 0 of 10 |
-| [database_consistency](https://github.com/djezzzl/database_consistency) | 1 of 10 | 0 of 10 |
-| [active_record_doctor](https://github.com/gregnavis/active_record_doctor) | 1 of 10 | 0 of 10 |
-| Dead Heat scan (reads the code) | 10 of 10 | 0 of 10 |
-| **Dead Heat sweep** (runs it, no setup) | **10 of 10** | **0 of 10** |
+The strongest test: take a race bug a well-known Rails app found and fixed, go back to the code from just
+**before** the fix, and see if Dead Heat breaks it. Then check that it stays quiet on the code **with** the
+fix.
 
-The same on PostgreSQL and MySQL. On SQLite the sweep finds 9: Rails 8 runs SQLite writes with
-`BEGIN IMMEDIATE`, which really does stop the tenth (a uniqueness validation) from racing there. Two of
-the races sent something that can't be taken back: a second confirmation email and a second shipping job.
-The two existing tools only look for a uniqueness validation without a unique index, so they catch that
-one kind; every other race lives in controller code they don't read.
-
-**On a real app.** [Lobsters](https://github.com/lobsters/lobsters), the link aggregator, fixed a race in
-December 2024: two stories from the same new site at once could crash on a unique index. Dead Heat, with a
-ten-line race test ([`bench/historical/lobsters`](bench/historical/lobsters)):
+**Lobsters**, the link aggregator, fixed a race in December 2024: two stories from the same new site at
+once could crash on a unique index (shape 3). Dead Heat, with a ten-line race test
+([`bench/historical/lobsters`](bench/historical/lobsters)):
 
 | Lobsters code | Dead Heat |
 | --- | --- |
@@ -64,8 +107,8 @@ ten-line race test ([`bench/historical/lobsters`](bench/historical/lobsters)):
 
 So it would have caught the gap in the first fix four months before it reached production.
 
-**Another real one.** [Spree](https://github.com/spree/spree) fixed a "gift card overspend race condition
-vulnerability" in March 2026. Two orders using one gift card at once could each take its whole balance.
+**Spree** fixed a "gift card overspend race condition vulnerability" in March 2026 (shape 1). Two orders
+using one gift card at once could each take its whole balance.
 
 | Spree code | Dead Heat |
 | --- | --- |
@@ -75,20 +118,55 @@ vulnerability" in March 2026. Two orders using one gift card at once could each 
 Dead Heat's scan points at the cause in the code before the fix: `gift_card.lock!` called outside a
 transaction, which releases the lock right away.
 
-**And Mastodon.** [Mastodon](https://github.com/mastodon/mastodon) fixed a race in February 2026: a client
-retrying a post at the same moment published it twice. Its duplicate check is in Redis, so the race test
-clears Redis before each run with `r.reset { … }`.
+**Mastodon** fixed a race in February 2026: a client retrying a post at the same moment published it
+twice. Its duplicate check is in Redis, so the race test clears Redis before each run with `r.reset { … }`.
 
 | Mastodon code | Dead Heat |
 | --- | --- |
 | Before the fix (`f7bf804a`) | broke in **18 of 20** tries (the same post published twice) |
 | The fix (`cff25c18`) | no race in **40** tries |
 
-**All together:** 4 of 4 real, fixed race bugs reproduced before their fixes, in three well-known apps.
-No race was found after the fixes that worked, and the one fix that didn't work was caught. A zero-setup sweep of today's Lobsters
-(its 171 request specs pass), and the Spree race test, also turned up races that are still in their
-code. Details of unfixed races aren't published here. All of this is in [`bench/results.md`](bench/results.md), with the
-commands to rerun it.
+**All together:** 4 of 4 real, fixed race bugs reproduced before their fixes, in three well-known apps,
+including one fix that didn't work. No race was found after the fixes that worked. A zero-setup sweep of
+today's Lobsters (its 171 request specs pass), and the Spree race test, also turned up races that are still
+in their code. Details of unfixed races aren't published here.
+
+### Compared with the tools Rails developers already use
+
+To compare tools side by side, you need an app where you know exactly where every race is. **Corner Store**
+([`demo/`](demo)) is that app: a small Rails 8 store built for this benchmark, with ten races planted
+on purpose (the shapes above, in features like checkout, coupons and webhooks). Each one has a **fixed
+twin**: the same feature with the race fixed. A tool that flags a fixed twin is raising a false alarm.
+
+Each tool ran on the same code ([`bench/tools_bench.rb`](bench/tools_bench.rb)):
+
+| Tool | What it does | Planted races caught | False alarms on the fixed twins |
+| --- | --- | --- | --- |
+| The app's own tests | Ordinary request tests, one per feature, all passing | 0 of 10 | 0 of 10 |
+| [database_consistency](https://github.com/djezzzl/database_consistency) | Compares models with the database schema | 1 of 10 | 0 of 10 |
+| [active_record_doctor](https://github.com/gregnavis/active_record_doctor) | Compares models with the database schema | 1 of 10 | 0 of 10 |
+| Dead Heat scan | Reads the code for the three shapes | 10 of 10 | 0 of 10 |
+| **Dead Heat sweep** | Runs each request twice at once | **10 of 10** | **0 of 10** |
+
+What the rows mean:
+
+- **The app's own tests catch nothing, and that's normal.** They aren't broken. Each sends one request
+  at a time, the way almost every test suite does, and one request at a time can't race. That's the gap
+  Dead Heat fills.
+- **The two existing tools catch one.** They check one thing that's about races: a uniqueness validation
+  with no unique index behind it, which is the newsletter signup. The other nine races are in controller
+  code, which those tools don't read.
+- **The scan's 10 of 10 is the weakest number here.** The same person wrote the planted races and the
+  scan's rules. The sweep doesn't have that problem: it doesn't know what the shapes look like, it only
+  compares results. The real apps above are the fairer test.
+- **Different databases:** the result is the same on PostgreSQL and MySQL. On SQLite the sweep finds 9,
+  and that's correct. Rails 8 makes each SQLite write transaction take the database's write lock as it
+  begins (`BEGIN IMMEDIATE`), so a second signup waits until the first has finished. The newsletter's race
+  can't happen on SQLite.
+
+Two of the ten races sent something that can't be taken back: a second confirmation email and a second
+shipping job. The sweep reached 23 of the app's 28 write endpoints (82%) from its existing tests, with no
+setup. Everything above is in [`bench/results.md`](bench/results.md), with the commands to rerun it.
 
 ## Quick start
 
@@ -269,5 +347,5 @@ Where the ideas come from:
 - *Feral Concurrency Control* (Bailis et al., SIGMOD 2015) showed that most Rails apps check invariants in
   code rather than in the database.
 - *ACIDRain* (Warszawski and Bailis, SIGMOD 2017) found these bugs in real e-commerce apps.
-- Randomized scheduling (Burckhardt et al., ASPLOS 2010) showed that a few well-placed delays find most
-  ordering bugs.
+- Randomized scheduling (Burckhardt et al., ASPLOS 2010) showed that a few randomly placed delays find
+  ordering bugs with a provable chance on every run.
