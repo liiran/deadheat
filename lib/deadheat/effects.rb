@@ -55,7 +55,7 @@ module Deadheat
       lines = []
       irreversible = false
       extra(mails, expected.mails).each do |(to, subject), n|
-        lines << "#{n} extra email#{'s' if n > 1} to #{to}: “#{subject}”"
+        lines << "#{n} extra email#{'s' if n > 1} to #{Redact.value('email', to)}: “#{subject}”"
         irreversible = true
       end
       extra(jobs, expected.jobs).each do |(job, _args), n|

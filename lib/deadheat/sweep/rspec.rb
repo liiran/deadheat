@@ -9,6 +9,7 @@ RSpec.configure do |config|
     if Deadheat::Sweep.mode == "race"
       next example.run unless Deadheat::Sweep.target?(example.id)
 
+      Deadheat::Preflight.database! # before anything is committed: only ever on a test database
       group = example.example_group
       group.uses_transaction(example.metadata[:description]) if group.respond_to?(:uses_transaction)
     end

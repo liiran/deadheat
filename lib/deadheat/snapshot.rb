@@ -31,6 +31,7 @@ module Deadheat
       tables &= @tables
       return if tables.empty?
 
+      Preflight.database! # this deletes rows: never anywhere but a test database
       connection = @schema.connection
       ActiveRecord::Base.uncached do
         connection.disable_referential_integrity do
@@ -54,8 +55,17 @@ module Deadheat
       quoted = names.map { |name| connection.quote_column_name(name) }.join(", ")
       rows.each_slice(BATCH) do |batch|
         values = batch.map { |row| "(#{names.map { |name| quote(connection, table, name, row[name]) }.join(', ')})" }
-        connection.execute("INSERT INTO #{connection.quote_table_name(table)} (#{quoted}) VALUES #{values.join(', ')}")
+        connection.execute("INSERT INTO #{connection.quote_table_name(table)} (#{quoted})#{overriding(connection)} VALUES #{values.join(', ')}")
       end
+    end
+
+    # PostgreSQL refuses an explicit id for a GENERATED ALWAYS identity column unless told this.
+    def overriding(connection)
+      return "" unless connection.adapter_name.match?(/postg/i)
+
+      connection.database_version.to_i >= 100_000 ? " OVERRIDING SYSTEM VALUE" : ""
+    rescue StandardError
+      ""
     end
 
     # Values come back from the database in its own text form, so they go back in the same way.
@@ -113,7 +123,9 @@ module Deadheat
           next unless sequence
 
           last, called = connection.select_rows("SELECT last_value, is_called FROM #{connection.quote_table_name(sequence)}").first
-          map[table] = [sequence.to_s, last, called == true || called == "t"]
+          # Kept in its quoted form, so a mixed-case name ("Users_id_seq") survives the trip back.
+          name = sequence.respond_to?(:quoted) ? sequence.quoted : sequence.to_s
+          map[table] = [name, last, called == true || called == "t"]
         end
       end
 

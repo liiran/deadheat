@@ -145,7 +145,7 @@ module Deadheat
           have = duplicates(@outcome.after[table], rule)
           next if have.empty? || have.size <= duplicates(expected.after[table], rule).size
 
-          values = rule[:columns].zip(have.first).map { |column, value| "#{column} “#{show(value)}”" }.join(" and ")
+          values = rule[:columns].zip(have.first).map { |column, value| Redact.hidden?(column) ? column.to_s : "#{column} “#{show(value)}”" }.join(" and ")
           return ["Duplicate despite a rule: 2 #{table} with the same #{values}, though the model says it must be unique", table]
         end
       end
@@ -175,7 +175,7 @@ module Deadheat
             their_delta = theirs[2] - theirs[1]
             next unless their_delta.abs > mine_delta.abs
 
-            return "Lost update: #{table} ##{key} #{column} went #{show(old)} → #{show(new)}, one at a time #{show(theirs[1])} → #{show(theirs[2])}"
+            return "Lost update: #{table} ##{key} #{column} went #{show(old, column)} → #{show(new, column)}, one at a time #{show(theirs[1], column)} → #{show(theirs[2], column)}"
           end
         end
         # A counter in a row this run created (an upsert-style counter that starts at 1).
@@ -188,7 +188,7 @@ module Deadheat
             want = other[column]
             next unless value.is_a?(Numeric) && want.is_a?(Numeric) && value.abs < want.abs
 
-            return "Lost update: a new #{table} row's #{column} is #{show(value)}, one at a time #{show(want)}"
+            return "Lost update: a new #{table} row's #{column} is #{show(value, column)}, one at a time #{show(want, column)}"
           end
         end
       end
@@ -205,8 +205,9 @@ module Deadheat
       end
     end
 
-    def show(value)
-      value.is_a?(BigDecimal) ? (value.frac.zero? ? value.to_i.to_s : value.to_s("F")) : value.to_s
+    # A value for a message. A column the app hides from its logs shows as [FILTERED].
+    def show(value, column = nil)
+      value.is_a?(BigDecimal) ? (value.frac.zero? ? value.to_i.to_s : value.to_s("F")) : Redact.value(column, value.to_s)
     end
   end
 end

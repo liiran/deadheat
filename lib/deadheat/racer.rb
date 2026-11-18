@@ -33,11 +33,13 @@ module Deadheat
 
       def stop
         @jobs << nil
-        @thread.join(1) || @thread.kill
+        @thread.join(1) || kill
       end
 
+      # Stops the thread and waits until it's really gone, so nothing of it runs beside what's next.
       def kill
         @thread.kill
+        @thread.join(5)
       end
     end
 
@@ -78,6 +80,7 @@ module Deadheat
           actor.error = e
         ensure
           actor.finished = Deadheat.now
+          restore_lock_waits
           release_connections
         end
       end
@@ -88,10 +91,16 @@ module Deadheat
       events.each_with_index do |event, i|
         next if event.wait([deadline - Deadheat.now, 0.01].max)
 
-        # A worker stuck past the time limit is replaced, so the next run starts clean.
-        slot = indexes[i]
-        @workers[slot].kill
-        @workers[slot] = Worker.new(slot)
+        # Past the time limit. Every request still running is stopped and waited for before anything
+        # else happens, so none of them writes while the tables are being put back.
+        events.each_with_index do |other, j|
+          next if other.set?
+
+          slot = indexes[j]
+          @workers[slot].kill
+          @workers[slot] = Worker.new(slot)
+        end
+        discard_idle_connections
         raise Hung, "#{actors[i].name} didn't finish within #{@timeout.round} s (stuck waiting for a lock or an external call?)"
       end
     end
@@ -103,6 +112,29 @@ module Deadheat
       when /postg/i then connection.execute("SET lock_timeout = '#{Integer(@lock_timeout)}s'")
       when /mysql|trilogy/i then connection.execute("SET SESSION innodb_lock_wait_timeout = #{Integer(@lock_timeout)}")
       end
+    end
+
+    # The connection goes back to the app's pool afterwards, so it gets its usual setting back.
+    def restore_lock_waits
+      connection = ActiveRecord::Base.respond_to?(:lease_connection) ? ActiveRecord::Base.lease_connection : ActiveRecord::Base.connection
+      return if connection.transaction_open?
+
+      case connection.adapter_name
+      when /postg/i then connection.execute("RESET lock_timeout")
+      when /mysql|trilogy/i then connection.execute("SET SESSION innodb_lock_wait_timeout = DEFAULT")
+      end
+    rescue StandardError
+      nil # a connection that broke during the run is thrown away by the pool anyway
+    end
+
+    # A connection whose request was stopped half-way may be in any state. Idle connections are
+    # closed; the pool opens fresh ones as needed.
+    def discard_idle_connections
+      pool = ActiveRecord::Base.connection_pool
+      pool.reap     # take back connections whose thread is gone
+      pool.flush(0) # and close every idle one
+    rescue StandardError
+      nil
     end
 
     def release_connections

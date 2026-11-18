@@ -31,6 +31,7 @@ module Deadheat
 
       def run
         started = Deadheat.now
+        Results.prune(File.join(@root, "tmp/deadheat/runs"))
         FileUtils.mkdir_p(@dir)
         say "Dead Heat sweep (#{@framework == 'rspec' ? 'RSpec' : 'Minitest'})"
         say "Recording the requests your tests make…"
@@ -62,11 +63,19 @@ module Deadheat
       end
 
       # Runs one target again on its own (used by generated regression tests).
-      def recheck(test:, file:, index:)
+      def recheck(test:, file:, index:, route: nil)
         FileUtils.mkdir_p(@dir)
-        target = { "test" => test, "file" => file, "index" => index, "method" => "?", "route" => "?" }
-        race_round([target], [])
-        collect([target]).first
+        target = { "test" => test, "file" => file, "index" => index, "route" => route }
+        # One recheck at a time: each one restores tables in the test database, and parallel test
+        # workers would otherwise do that to the same database at once.
+        File.open(File.join(@root, "tmp/deadheat/recheck.lock"), File::RDWR | File::CREAT) do |lock|
+          lock.flock(File::LOCK_EX)
+          race_round([target], [])
+        end
+        result = collect([target]).first
+        # A recheck's files are only worth keeping when it couldn't run (the log says why).
+        FileUtils.rm_rf(@dir) unless result[:status] == "unchecked"
+        result
       end
 
       private
@@ -152,15 +161,29 @@ module Deadheat
         env
       end
 
+      # Starts a test command and writes what it prints to a log. The command gets no input (a test
+      # that stops at a debugger prompt would otherwise wait forever) and a time limit.
       def run_command(env, command, log)
+        limit = Float(ENV.fetch("DEADHEAT_TEST_TIMEOUT", 1800))
         File.open(log, "w") do |io|
-          Open3.popen2e(env, *command, chdir: @root) do |_stdin, output, wait|
-            output.each_line { |line| io.write(line) }
-            wait.value
+          Open3.popen2e(env, *command, chdir: @root) do |stdin, output, wait|
+            stdin.close
+            reader = Thread.new { output.each_line { |line| io.write(line) } }
+            unless wait.join(limit)
+              stop_process(wait.pid)
+              io.write("\nDead Heat stopped this command after #{limit.round} s (DEADHEAT_TEST_TIMEOUT).\n")
+            end
+            reader.join(5)
           end
         end
       rescue Errno::ENOENT => e
         File.write(log, "Couldn't start #{command.first}: #{e.message}\n")
+      end
+
+      def stop_process(pid)
+        Process.kill("KILL", pid)
+      rescue SystemCallError
+        nil
       end
 
       def rails
@@ -238,7 +261,8 @@ module Deadheat
       def write_regression_tests(races)
         races.filter_map do |result|
           target = result[:target]
-          slug = endpoint_label(target).downcase.gsub(/[^a-z0-9]+/, "_").gsub(/\A_|_\z/, "")
+          slug = endpoint_label(target).downcase.gsub(/[^a-z0-9]+/, "_").gsub(/\A_|_\z/, "").first(80).delete_suffix("_")
+          slug = "request" if slug.empty?
           if @framework == "rspec"
             path = File.join(@root, "spec/races/sweep/#{slug}_race_spec.rb")
             body = rspec_regression(target, result)
@@ -254,20 +278,23 @@ module Deadheat
         end
       end
 
+      # The generated files are built from what the tests did (routes, paths, test names). Text goes in
+      # as a comment on one line or as a quoted Ruby string, so nothing in it can become code.
       def minitest_regression(target, result, slug)
+        label = endpoint_label(target)
         <<~RUBY
           require "test_helper"
           require "deadheat/minitest"
 
           # Written by `bin/deadheat sweep` on #{Time.now.strftime('%Y-%m-%d')}:
-          #   #{endpoint_label(target)}: #{result[:title]}
-          # It sends request #{target['index']} of #{target['test']} twice at the same moment, as the sweep did,
+          #   #{one_line("#{label}: #{result[:title]}")}
+          # It sends request #{Integer(target['index'])} of #{one_line(target['test'])} twice at the same moment, as the sweep did,
           # and fails while the race is there. Keep it, so the race can't quietly come back.
           class #{slug.camelize}RaceTest < ActiveSupport::TestCase
             self.use_transactional_tests = false if respond_to?(:use_transactional_tests=)
 
-            test "#{endpoint_label(target)} survives being sent twice at once" do
-              result = Deadheat::Sweep.recheck(test: #{target['test'].inspect}, file: #{target['file'].inspect}, index: #{target['index']})
+            test #{"#{label} survives being sent twice at once".inspect} do
+              result = Deadheat::Sweep.recheck(test: #{target['test'].to_s.inspect}, file: #{target['file'].to_s.inspect}, index: #{Integer(target['index'])}, route: #{(target['route'] && target['route'].to_s).inspect})
               assert result[:passed], result[:message]
             end
           end
@@ -275,21 +302,27 @@ module Deadheat
       end
 
       def rspec_regression(target, result)
+        label = endpoint_label(target)
         <<~RUBY
           require "rails_helper"
           require "deadheat"
 
           # Written by `bin/deadheat sweep` on #{Time.now.strftime('%Y-%m-%d')}:
-          #   #{endpoint_label(target)}: #{result[:title]}
-          # It sends request #{target['index']} of #{target['file']}:#{target['line']} twice at the same moment, as the
+          #   #{one_line("#{label}: #{result[:title]}")}
+          # It sends request #{Integer(target['index'])} of #{one_line("#{target['file']}:#{target['line']}")} twice at the same moment, as the
           # sweep did, and fails while the race is there. Keep it, so the race can't quietly come back.
-          RSpec.describe "#{endpoint_label(target)} survives being sent twice at once" do
+          RSpec.describe #{"#{label} survives being sent twice at once".inspect} do
             it "has no race" do
-              result = Deadheat::Sweep.recheck(test: #{target['test'].inspect}, file: #{target['file'].inspect}, index: #{target['index']}, framework: "rspec")
+              result = Deadheat::Sweep.recheck(test: #{target['test'].to_s.inspect}, file: #{target['file'].to_s.inspect}, index: #{Integer(target['index'])}, route: #{(target['route'] && target['route'].to_s).inspect}, framework: "rspec")
               expect(result[:passed]).to be(true), result[:message]
             end
           end
         RUBY
+      end
+
+      # Text for a comment: one line, whatever it contained.
+      def one_line(text)
+        text.to_s.gsub(/[\r\n\u2028\u2029]+/, " ")
       end
 
       def line_for(target, result)

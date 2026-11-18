@@ -14,7 +14,25 @@ module Deadheat
       File.join(Deadheat.config.results_path, "runs", run_id)
     end
 
+    KEEP = 30
+    OURS = /\A(?:recheck-)?\d{8}-\d{6}(?:-\h+)?\z/
+
+    # Keeps the newest runs and deletes older ones. Only folders named like a run and holding nothing
+    # but Dead Heat's own files are ever deleted.
+    def prune(runs = File.join(Deadheat.config.results_path, "runs"), keep: KEEP)
+      folders = Dir[File.join(runs, "*")].select { |path| File.directory?(path) && File.basename(path).match?(OURS) }
+      old = folders.sort_by { |path| File.mtime(path) }[0...-keep] || []
+      old.each do |path|
+        entries = Dir.children(path)
+        FileUtils.rm_r(path, secure: true) if entries.all? { |name| name.match?(/\.(?:json|jsonl|log)\z/) && File.file?(File.join(path, name)) }
+      end
+    rescue SystemCallError
+      nil
+    end
+
     def save(result, extra: {})
+      prune unless @pruned
+      @pruned = true
       FileUtils.mkdir_p(dir)
       slug = result.name.to_s.parameterize.first(60).delete_suffix("-").presence || "race"
       path = File.join(dir, "#{slug}-#{SecureRandom.hex(3)}.json")

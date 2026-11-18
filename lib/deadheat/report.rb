@@ -24,42 +24,63 @@ module Deadheat
         out.puts "No results yet. Run `bin/deadheat sweep` or your race tests first."
         return 1
       end
-      path = File.join(root, "tmp/deadheat/report.html")
+      path = File.join(folder(root), "report.html")
+      FileUtils.mkdir_p(File.dirname(path))
       File.write(path, html(run))
       out.puts "Report written to #{path.delete_prefix("#{root}/")}"
       launch(path) if open
       0
     end
 
-    def runs(root)
-      Dir[File.join(root, "tmp/deadheat/runs/*")].select { |dir| File.directory?(dir) }.sort_by { |dir| File.mtime(dir) }.reverse
+    # Where results are kept: tmp/deadheat in the app, unless the config says otherwise.
+    def folder(root)
+      Deadheat.config.results_dir || File.join(root, "tmp/deadheat")
     end
 
+    # Newest first. A regression test's own recheck isn't a run to show.
+    def runs(root)
+      Dir[File.join(folder(root), "runs/*")].select { |dir| File.directory?(dir) && !File.basename(dir).start_with?("recheck-") }
+                                           .sort_by { |dir| File.mtime(dir) }.reverse
+    end
+
+    # A results file as a Hash, or nil when it's missing, half-written or not what we wrote.
+    def read(path)
+      data = JSON.parse(File.read(path))
+      data if data.is_a?(Hash)
+    rescue JSON::ParserError, SystemCallError
+      nil
+    end
+
+    # A run's id is its folder name under tmp/deadheat/runs. Anything else (a path, "..") is refused,
+    # so an id can never point outside that folder.
+    RUN_ID = /\A[A-Za-z0-9][\w.-]*\z/
+
     def load(root, id = nil)
-      dir = id ? File.join(root, "tmp/deadheat/runs", id) : runs(root).find { |d| Dir[File.join(d, "*.json")].any? }
+      return if id && !(id.is_a?(String) && id.match?(RUN_ID) && !id.include?(".."))
+
+      dir = id ? File.join(folder(root), "runs", id) : runs(root).find { |d| Dir[File.join(d, "*.json")].any? }
       return unless dir && File.directory?(dir)
 
-      sweep_file = File.join(dir, "sweep.json")
-      sweep = File.exist?(sweep_file) ? JSON.parse(File.read(sweep_file)) : nil
+      sweep = read(File.join(dir, "sweep.json"))
       results = Dir[File.join(dir, "*.json")].filter_map do |path|
         next if File.basename(path).start_with?("sweep", "targets-")
 
-        JSON.parse(File.read(path))
-      rescue JSON::ParserError
-        nil
+        data = read(path)
+        data if data && data["findings"].is_a?(Array)
       end
-      scan_file = File.join(root, "tmp/deadheat/scan.json")
-      suspects = File.exist?(scan_file) ? JSON.parse(File.read(scan_file))["suspects"] : []
+      suspects = Array(read(File.join(folder(root), "scan.json"))&.dig("suspects")).grep(Hash)
       Run.new(id: File.basename(dir), dir: dir, sweep: sweep, results: results, suspects: suspects, started_at: File.mtime(dir))
     end
 
+    # Opens the report in the default browser. Each command gets the path as one argument and no
+    # shell is involved, so a folder name can't be read as a command.
     def launch(path)
       command = case RbConfig::CONFIG["host_os"]
-                when /mswin|mingw|cygwin/ then ["cmd", "/c", "start", "", path]
+                when /mswin|mingw|cygwin/ then ["explorer.exe", path.tr("/", "\\")]
                 when /darwin/ then ["open", path]
                 else ["xdg-open", path]
                 end
-      system(*command)
+      system(*command, out: File::NULL, err: File::NULL)
     end
 
     # ---- the page ------------------------------------------------------------------------------
@@ -114,7 +135,7 @@ module Deadheat
     end
 
     def duration(seconds)
-      return "" unless seconds
+      return "" unless seconds.is_a?(Numeric)
 
       seconds < 60 ? "#{seconds.round(1)} s" : "#{(seconds / 60).floor}m #{(seconds % 60).round.to_s.rjust(2, '0')}s"
     end
@@ -140,6 +161,7 @@ module Deadheat
       <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
       <title>Dead Heat report</title>
       <style>
         :root {
@@ -224,7 +246,7 @@ module Deadheat
         <header><div class="logo" aria-hidden="true"><i></i><i></i><b></b></div><h1>Dead Heat</h1></header>
         <p class="meta">
           <%= run.sweep ? "Sweep of #{entries.size} endpoint#{'s' unless entries.size == 1}" : "#{entries.size} race test#{'s' unless entries.size == 1}" %>
-          · <%= h database(run) %> · <%= h when_text(run) %><%= run.sweep ? " · #{duration(run.sweep['seconds'])}" : "" %>
+          · <%= h database(run) %> · <%= h when_text(run) %><%= run.sweep ? h(" · #{duration(run.sweep['seconds'])}") : "" %>
         </p>
 
         <section class="stats">
@@ -232,12 +254,12 @@ module Deadheat
           <div class="stat ok"><strong><%= clean.size %></strong><span>no race found</span></div>
           <% if notes.any? %><div class="stat"><strong><%= notes.size %></strong><span>right data, different replies</span></div><% end %>
           <% if (cov = run.sweep&.dig("coverage")) && cov["share"] %>
-          <div class="stat"><strong><%= (cov["share"] * 100).round %>%</strong><span><%= cov["checked"] %> of <%= cov["write_endpoints"] %> write endpoints checked, no setup</span></div>
+          <div class="stat"><strong><%= (cov["share"].to_f * 100).round %>%</strong><span><%= h cov["checked"] %> of <%= h cov["write_endpoints"] %> write endpoints checked, no setup</span></div>
           <% end %>
         </section>
 
         <% if problems.empty? %>
-          <div class="empty">No races found<%= entries.first && entries.first[:tries] ? " in #{entries.first[:tries]} tries per #{run.sweep ? 'endpoint' : 'race'}" : "" %>. A timing bug can't be proven absent, but none showed up.</div>
+          <div class="empty">No races found<%= entries.first && entries.first[:tries] ? h(" in #{entries.first[:tries]} tries per #{run.sweep ? 'endpoint' : 'race'}") : "" %>. A timing bug can't be proven absent, but none showed up.</div>
         <% else %>
           <h2>Races</h2>
         <% end %>
@@ -249,12 +271,12 @@ module Deadheat
             <summary>
               <span class="pill <%= css %>"><%= label %></span>
               <span class="endpoint"><%= h entry[:title] %></span>
-              <span class="count"><%= entry[:status] == "differs" ? finding["count"] : entry[:broken] %>/<%= entry[:tries] %> tries</span>
+              <span class="count"><%= h(entry[:status] == "differs" ? finding["count"] : entry[:broken]) %>/<%= h entry[:tries] %> tries</span>
               <span class="headline"><%= prose finding["title"] %><% if finding["irreversible"] %><span class="irr">Irreversible</span><% end %></span>
               <% if entry[:subtitle] %><span class="sub"><%= h entry[:subtitle] %></span><% end %>
             </summary>
             <div class="body">
-              <% if finding["lines"].any? %>
+              <% if finding["lines"]&.any? %>
               <div><h3>Two at once, compared with one at a time</h3><ul class="diff"><% finding["lines"].each do |line| %><li><%= h line %></li><% end %></ul></div>
               <% end %>
               <% if finding["why"] && entry[:status] != "differs" %><div><h3>Why</h3><p><%= prose finding["why"] %></p></div><% end %>
@@ -262,7 +284,7 @@ module Deadheat
               <% actors, rows = lanes(finding) %>
               <% hot = overlap_tables(finding) %>
               <div>
-                <h3>What happened in try <%= finding["try"] %> (<%= h finding["pauses"] %>)</h3>
+                <h3>What happened in try <%= h finding["try"] %> (<%= h finding["pauses"] %>)</h3>
                 <div class="timeline"><table>
                   <tr><th></th><% actors.first(2).each do |actor| %><th><%= h actor %></th><% end %></tr>
                   <% written = finding["timeline"].select { |r| r["kind"] == "write" }.flat_map { |r| r["tables"] || [] }.uniq %>
@@ -270,10 +292,10 @@ module Deadheat
                   <% hit = hot && row["sql"].to_s.match?(/\b#{Regexp.escape(hot)}\b/) && row["kind"] != "transaction" %>
                   <% quiet = !hit && row["kind"] == "read" && row["tables"] && (row["tables"] & written).empty? %>
                   <tr class="<%= hit ? 'hot' : '' %><%= quiet ? 'quiet' : '' %>">
-                    <td class="t"><%= format("%.1f", row["at_ms"]) %> ms</td>
+                    <td class="t"><%= format("%.1f", row["at_ms"].to_f) %> ms</td>
                     <% 2.times do |i| %>
                     <% if i == lane %>
-                    <td class="q filled lane<%= i %>"><span class="kind"><%= row["kind"] == "transaction" ? "tx" : row["kind"] %></span><%= h row["sql"] %><% if row["source"] %><span class="src"><%= h row["source"] %></span><% end %><% if row["pause"] && row["paused_ms"].to_i.positive? %><span class="wait">waited <%= row["paused_ms"] %> ms <%= row["pause"] %> this query</span><% end %></td>
+                    <td class="q filled lane<%= i %>"><span class="kind"><%= h(row["kind"] == "transaction" ? "tx" : row["kind"]) %></span><%= h row["sql"] %><% if row["source"] %><span class="src"><%= h row["source"] %></span><% end %><% if row["pause"] && row["paused_ms"].to_i.positive? %><span class="wait">waited <%= h row["paused_ms"] %> ms <%= h row["pause"] %> this query</span><% end %></td>
                     <% else %>
                     <td class="q"></td>
                     <% end %>
@@ -300,7 +322,7 @@ module Deadheat
           <h2>No race found</h2>
           <ul class="clean">
             <% clean.each do |entry| %>
-            <li><span class="endpoint"><%= h entry[:title] %></span><span class="count"><%= entry[:tries] %> tries<%= entry[:status] == "protected" ? " · protected" : "" %></span></li>
+            <li><span class="endpoint"><%= h entry[:title] %></span><span class="count"><%= h entry[:tries] %> tries<%= entry[:status] == "protected" ? " · protected" : "" %></span></li>
             <% end %>
           </ul>
         <% end %>

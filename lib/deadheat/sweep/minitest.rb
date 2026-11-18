@@ -9,6 +9,7 @@ module Deadheat
         # In the race pass, a chosen test runs without a wrapping transaction: racing requests use
         # their own connections and must see its data. The sweep puts every table back afterwards.
         if Sweep.target?(id)
+          Preflight.database! # before anything is committed: only ever on a test database
           self.class.uses_transaction(name) if self.class.respond_to?(:uses_transaction)
           DatabaseCleanerPause.start_pause
         end

@@ -18,7 +18,7 @@ module Deadheat
     # One running test.
     class TestRun
       attr_reader :id, :file, :line, :name, :context, :thread, :framework
-      attr_accessor :index, :target, :route, :original, :bypass, :result
+      attr_accessor :index, :target, :route, :original, :schema, :bypass, :result
 
       def initialize(id:, file:, line:, name:, context:, framework:, target: nil)
         @id = id
@@ -87,7 +87,8 @@ module Deadheat
         if mode == "race"
           Writes.clear
           Writes.start
-          run.original = Snapshot.take(Schema.new(connection))
+          run.schema = Schema.new(Preflight.database!)
+          run.original = Snapshot.take(run.schema)
         end
         run
       end
@@ -97,7 +98,7 @@ module Deadheat
         return unless run
 
         Thread.current.thread_variable_set(THREAD_KEY, nil)
-        run.original&.restore(Writes.tables)
+        run.original&.restore(Writes.tables_in(run.schema))
         Writes.stop if run.original
         run.result
       end
@@ -167,7 +168,7 @@ module Deadheat
           end
         end.run
         run.result = result
-        saved = Results.save(result, extra: { sweep: { test: run.id, file: run.file, line: run.line, name: run.name, index: run.index, method: method.to_s.upcase, path: path.to_s, route: run.route } })
+        saved = Results.save(result, extra: { sweep: { test: run.id, file: run.file, line: run.line, name: run.name, index: run.index, method: method.to_s.upcase, path: path.to_s.sub(/\?.*/, ""), route: run.route } })
         raise Stop, "Dead Heat raced request #{run.index} of this test and stopped it (results: #{saved})"
       end
 
@@ -243,10 +244,11 @@ module Deadheat
     class << self
       # Used by the regression tests the sweep writes: race one request of one test again, in its own
       # process, and say whether it passed. Returns { passed:, message:, status: }.
-      def recheck(test:, file:, index:, framework: "minitest")
+      def recheck(test:, file:, index:, route: nil, framework: "minitest")
         require "deadheat/sweep/runner"
         root = defined?(Rails) && Rails.root ? Rails.root.to_s : Dir.pwd
-        result = Runner.new(framework: framework, out: StringIO.new, root: root, write_tests: false).recheck(test: test, file: file, index: index)
+        run_id = "recheck-#{Time.now.utc.strftime('%Y%m%d-%H%M%S')}-#{SecureRandom.hex(2)}"
+        result = Runner.new(framework: framework, out: StringIO.new, root: root, write_tests: false, run_id: run_id).recheck(test: test, file: file, index: index, route: route)
         return { passed: false, status: "unchecked", message: "Dead Heat couldn't reach request #{index} of #{test}. Has the test changed? Run bin/deadheat sweep #{file} to look again." } if result[:status] == "unchecked"
 
         { passed: result[:passed], status: result[:status], message: result[:message] }

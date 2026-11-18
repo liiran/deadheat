@@ -126,7 +126,7 @@ module Deadheat
           end
         ensure
           @racer&.stop
-          original.restore(Writes.tables)
+          original.restore(Writes.tables_in(@schema))
         end
       end
       result
@@ -152,6 +152,13 @@ module Deadheat
       serial = [first, again].map { |outcome| rebuild(outcome) }
       serial.concat(orders.drop(1).map { |order| perform(order) })
       singles = (definition.identical? ? [0] : (0...count)).map { |i| perform([i], only: i) }
+
+      failing = serial.first.replies.each_with_index.select { |reply, _| reply&.failed? }
+      failing.each do |reply, i|
+        note = "Even one at a time, #{names[i]} fails (#{reply}). Dead Heat compares with that, so “no race” here only means two at once did no worse. Check the setup, or fix that failure first."
+        warnings << note
+        warn "Dead Heat, “#{@name}”: #{note}"
+      end
 
       broken_alone = serial.flat_map(&:failed_checks).uniq
       if broken_alone.any?
@@ -184,6 +191,9 @@ module Deadheat
         end
       end
 
+      if Writes.other_databases.any?
+        warnings << "The race also wrote to another database (#{Writes.other_databases.sort.join(', ')}). Dead Heat restores and compares only the main one, so those rows were left in place and weren't checked."
+      end
       warnings.concat(Deadheat.internal_errors.map { |e| "Dead Heat hit an internal error and ignored it: #{e.class}: #{e.message}" }.uniq)
       Deadheat.internal_errors.clear
       Result.new(
@@ -198,7 +208,7 @@ module Deadheat
     # One run: start from the snapshot, run the actors (in an order, alone, or together), and record
     # what happened.
     def perform(order, schedules: nil, only: nil)
-      @base.restore(Writes.tables)
+      @base.restore(Writes.tables_in(@schema))
       @resets.each { |block| @context.instance_exec(&block) }
       actors = @sessions.actors
       actors.each_with_index { |actor, i| actor.schedule = schedules&.[](i) }
@@ -210,7 +220,7 @@ module Deadheat
         end
       end
       ran = only ? [actors[only]] : actors
-      after = Snapshot.take(@schema, Writes.tables)
+      after = Snapshot.take(@schema, Writes.tables_in(@schema))
       canon = Canon.build(@schema, @base, after, ignore: @ignore)
       replies = actors.map { |actor| ran.include?(actor) ? Outcome.reply_for(actor, canon.new_ids) : nil }
       checks = @checks.map do |description, block|

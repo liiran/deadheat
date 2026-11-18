@@ -13,6 +13,11 @@ Gem::Specification.new do |spec|
   TEXT
   spec.homepage = "https://github.com/liiran/deadheat"
   spec.required_ruby_version = ">= 3.2"
+  spec.metadata = {
+    "source_code_uri" => spec.homepage,
+    "bug_tracker_uri" => "#{spec.homepage}/issues",
+    "rubygems_mfa_required" => "true" # publishing a release needs a second factor
+  }
 
   spec.files = Dir["lib/**/*", "app/**/*", "config/**/*", "exe/*", "README.md"]
   spec.bindir = "exe"
@@ -22,5 +27,5 @@ Gem::Specification.new do |spec|
   spec.add_dependency "activerecord", ">= 7.1", "< 9"
   spec.add_dependency "actionpack", ">= 7.1", "< 9"
   spec.add_dependency "railties", ">= 7.1", "< 9"
-  spec.add_dependency "prism", ">= 1.2"
+  spec.add_dependency "prism", "~> 1.2"
 end

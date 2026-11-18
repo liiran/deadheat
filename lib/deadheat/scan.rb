@@ -50,7 +50,7 @@ module Deadheat
       paths = argv.empty? ? default_paths(root) : argv
       suspects = run(root: root, paths: paths)
       print(suspects, out: out, root: root)
-      dir = File.join(root, "tmp/deadheat")
+      dir = defined?(Deadheat.config) ? (Deadheat.config.results_dir || File.join(root, "tmp/deadheat")) : File.join(root, "tmp/deadheat")
       FileUtils.mkdir_p(dir)
       File.write(File.join(dir, "scan.json"), JSON.pretty_generate(suspects: suspects.map(&:to_h)))
       0

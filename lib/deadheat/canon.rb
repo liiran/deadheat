@@ -50,7 +50,9 @@ module Deadheat
     end
 
     def compute
-      table_names = (@after.tables | @before.tables)
+      # Only tables the "after" snapshot covers. It holds just the tables that were written, and a
+      # table it leaves out didn't change (reading it as empty would call every row deleted).
+      table_names = @after.tables
       changes = table_names.to_h { |table| [table, raw_change(table)] }
       changes.each_value { |change| change[:added].each { |row| remember_new(change[:table], row) } }
       changes.each { |table, change| label_rows(table, change[:added]) }
@@ -128,8 +130,16 @@ module Deadheat
       tables[table]&.added&.size.to_i
     end
 
+    # For the results file. Values of columns the app hides from its logs are hidden (see Redact).
     def to_h
-      tables.transform_values { |change| change.to_h }
+      hide = ->(column, value) { value.nil? ? nil : Redact.value(column, value) }
+      tables.transform_values do |change|
+        {
+          added: change.added.map { |row| row.map { |column, value| [column, hide.call(column, value)] } },
+          removed: change.removed.map { |row| row.is_a?(Array) ? row.map { |column, value| [column, hide.call(column, value)] } : row },
+          changed: change.changed.map { |key, columns| [key, columns.map { |column, old, new| [column, hide.call(column, old), hide.call(column, new)] }] }
+        }
+      end
     end
 
     private
@@ -254,7 +264,8 @@ module Deadheat
     end
 
     def table_for_type(type)
-      type.safe_constantize&.table_name
+      model = type.safe_constantize
+      model.table_name if model.is_a?(Class) && model < ActiveRecord::Base
     rescue StandardError
       nil
     end
@@ -274,7 +285,7 @@ module Deadheat
       return "" unless a && b
 
       column = a.zip(b).find { |x, y| x != y }&.first&.first
-      column ? " (#{column}: #{show(a.to_h[column])} vs. #{show(b.to_h[column])} one at a time)" : ""
+      column ? " (#{column}: #{show(a.to_h[column], column)} vs. #{show(b.to_h[column], column)} one at a time)" : ""
     end
 
     def changed_differences(table, mine, theirs)
@@ -286,18 +297,19 @@ module Deadheat
         (a.keys | b.keys).sort.filter_map do |column|
           next if a[column] == b[column]
 
-          now = a[column] ? "#{show(a[column][0])} → #{show(a[column][1])}" : "unchanged"
-          expected = b[column] ? "#{show(b[column][0])} → #{show(b[column][1])}" : "unchanged"
+          now = a[column] ? "#{show(a[column][0], column)} → #{show(a[column][1], column)}" : "unchanged"
+          expected = b[column] ? "#{show(b[column][0], column)} → #{show(b[column][1], column)}" : "unchanged"
           "#{table} ##{key} #{column}: #{now} (one at a time: #{expected})"
         end
       end
     end
 
-    def show(value)
+    # A value for a message. A column the app hides from its logs shows as [FILTERED].
+    def show(value, column = nil)
       case value
       when nil then "empty"
       when BigDecimal then value.frac.zero? ? value.to_i.to_s : value.to_s("F")
-      else value.to_s
+      else Redact.value(column, value.to_s)
       end
     end
   end

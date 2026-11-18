@@ -9,17 +9,25 @@ class DemoSweepTest < Minitest::Test
   DEMO = File.expand_path("../../demo", __dir__)
   DB = ENV.fetch("DB", "sqlite")
 
+  # Runs the sweep and returns its output, exit status and the summary it wrote. The summary must be
+  # from this run: one that was already there doesn't count.
   def sweep(flags = "")
+    before = Dir[File.join(DEMO, "tmp/deadheat/runs/*/sweep.json")]
+    output, status = run_sweep(flags)
+    fresh = Dir[File.join(DEMO, "tmp/deadheat/runs/*/sweep.json")] - before
+    assert_equal 1, fresh.size, "the sweep wrote no summary:\n#{output}"
+    [output, status, JSON.parse(File.read(fresh.first))]
+  end
+
+  def run_sweep(flags)
     # The demo has its own Gemfile; don't let this repo's Bundler settings leak into it.
     env = { "DB" => DB, "BUNDLE_GEMFILE" => File.join(DEMO, "Gemfile"), "RUBYOPT" => nil, "BUNDLE_BIN_PATH" => nil }
     Open3.capture2e(env, "sh", "-c", "bin/rails db:create db:schema:load >/dev/null 2>&1; bin/deadheat sweep --no-tests --tries 10 #{flags}", chdir: DEMO)
   end
 
   def test_finds_every_planted_race_and_no_fixed_one
-    output, status = sweep
+    output, status, summary = sweep
     assert_equal 1, status.exitstatus, output
-    latest = Dir[File.join(DEMO, "tmp/deadheat/runs/*/sweep.json")].max_by { |path| File.mtime(path) }
-    summary = JSON.parse(File.read(latest))
     results = summary["results"]
     shop = results.reject { |r| r.dig("target", "route").to_s.start_with?("/fixed") || r.dig("target", "endpoint").to_s.match?(/Sessions|Passwords/) }
     fixed = results.select { |r| r.dig("target", "route").to_s.start_with?("/fixed") }
@@ -35,10 +43,8 @@ class DemoSweepTest < Minitest::Test
     assert summary.dig("coverage", "share").to_f > 0.7, summary["coverage"].inspect
   end
   def test_rspec_request_specs_too
-    output, status = sweep("--rspec")
+    output, status, summary = sweep("--rspec")
     assert_equal 1, status.exitstatus, output
-    latest = Dir[File.join(DEMO, "tmp/deadheat/runs/*/sweep.json")].max_by { |path| File.mtime(path) }
-    summary = JSON.parse(File.read(latest))
     assert_equal "rspec", summary["framework"]
     races = summary["results"].select { |r| r["status"] == "race" }.map { |r| r.dig("target", "route") }
     fixed = summary["results"].select { |r| r.dig("target", "route").to_s.start_with?("/fixed") }

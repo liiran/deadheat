@@ -55,6 +55,23 @@ module Deadheat
       @references ||= build_references
     end
 
+    # The given tables plus every table the database changes on its own when one of them is written:
+    # foreign keys with ON DELETE or ON UPDATE CASCADE / SET NULL, followed all the way down. Those
+    # changes never appear as a statement, so they'd otherwise be neither restored nor compared.
+    def with_cascades(names)
+      found = names.to_a & tables
+      queue = found.dup
+      until queue.empty?
+        cascades_from.fetch(queue.shift, []).each do |child|
+          next if found.include?(child)
+
+          found << child
+          queue << child
+        end
+      end
+      found
+    end
+
     # Models by table, for uniqueness rules and readable names.
     def models
       @models ||= ActiveRecord::Base.descendants.reject(&:abstract_class?).each_with_object({}) do |model, map|
@@ -87,6 +104,20 @@ module Deadheat
     end
 
     private
+
+    # { parent table => [tables with a cascading foreign key to it] }
+    def cascades_from
+      @cascades_from ||= tables.each_with_object(Hash.new { |hash, key| hash[key] = [] }) do |table, map|
+        next unless connection.respond_to?(:foreign_keys)
+
+        connection.foreign_keys(table).each do |fk|
+          actions = [fk.on_delete, fk.on_update].compact.map(&:to_sym)
+          map[fk.to_table.to_s] << table if (actions & %i[cascade nullify]).any? && !map[fk.to_table.to_s].include?(table)
+        end
+      rescue StandardError
+        next
+      end
+    end
 
     def build_references
       map = Hash.new { |hash, key| hash[key] = {} }

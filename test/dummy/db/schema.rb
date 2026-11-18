@@ -16,6 +16,13 @@ ActiveRecord::Schema.define do
     t.integer :likes_count, null: false, default: 0
   end
 
+  # Deleting a post deletes its comments in the database itself, without a statement of its own.
+  create_table :comments, force: true do |t|
+    t.references :post, null: false
+    t.string :body
+  end
+  add_foreign_key :comments, :posts, on_delete: :cascade
+
   # No unique index: `validates uniqueness` alone can't stop two signups at once.
   create_table :accounts, force: true do |t|
     t.string :email

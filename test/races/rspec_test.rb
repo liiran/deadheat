@@ -6,8 +6,10 @@ class RSpecSupportTest < ActiveSupport::TestCase
   test "race specs fail on the bugs, pass on the fixes, and leave other specs alone" do
     out = File.expand_path("../../tmp/rspec.json", __dir__)
     env = { "DEADHEAT_DB_NAME" => "deadheat_rspec_test" }
+    FileUtils.rm_f(out) # never read the file of an earlier run
     _stdout, stderr, _status = Open3.capture3(env, Gem.ruby, "-S", "rspec", "test/rspec/race_spec.rb", "--order", "defined", "--format", "json", "--out", out,
                                               chdir: File.expand_path("../..", __dir__))
+    assert File.exist?(out), "rspec wrote no results:\n#{stderr}"
     examples = JSON.parse(File.read(out))["examples"].to_h { |e| [e["description"], e] }
     assert_equal 6, examples.size, stderr
     assert_equal "failed", examples["BUGGY likes counter"]["status"]

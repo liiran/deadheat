@@ -26,6 +26,7 @@ module Deadheat
 
   autoload :Config, "deadheat/config"
   autoload :SQL, "deadheat/sql"
+  autoload :Redact, "deadheat/redact"
   autoload :Source, "deadheat/source"
   autoload :Actor, "deadheat/actor"
   autoload :Probe, "deadheat/probe"
