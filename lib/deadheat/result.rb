@@ -1,8 +1,10 @@
+# frozen_string_literal: true
+
 module Deadheat
   # What a whole race found over all its tries.
   class Result
     attr_reader :name, :location, :database, :tries, :counts, :findings, :seed, :expected,
-                :warnings, :seconds, :actors, :reproduce, :log
+      :warnings, :seconds, :actors, :reproduce, :log
 
     def initialize(name:, location:, database:, tries:, counts:, findings:, seed:, expected:, warnings:, seconds:, actors:, reproduce: nil, log: [])
       @name = name

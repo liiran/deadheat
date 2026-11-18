@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Shop
   # 1. Buying the last one. Reads the stock, decides, then saves it.
   class CheckoutsController < ApplicationController

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Fixed
   # 1. Fixed: the product row is locked while deciding, so the second buyer waits and sees 0.
   class CheckoutsController < ApplicationController

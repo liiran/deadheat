@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "deadheat/report"
 
 module Deadheat
@@ -14,23 +16,25 @@ module Deadheat
     LOOPBACK = /\A(?:127\.\d{1,3}\.\d{1,3}\.\d{1,3}|::1|0:0:0:0:0:0:0:1|::ffff:127\.\d{1,3}\.\d{1,3}\.\d{1,3})\z/
     LOCAL_HOST = /\A(?:localhost|127\.0\.0\.1|\[?::1\]?|[\w-]+\.localhost|[\w-]+\.test)\z/i
 
-    # Is this request from this computer?
-    # - The connection and the address Rails works out must both be loopback (`request.local?`).
-    # - If a proxy passed the request on, every address it lists must be loopback too. Rails trusts
-    #   private-network addresses there, which a visitor behind a local proxy could use to slip in.
-    # - The page must have been asked for by a local name, which stops another website from reaching
-    #   it through the browser (DNS rebinding).
-    # A request forwarded by something that adds no headers at all (an SSH tunnel, a port forward)
-    # looks local, so don't expose a development server that mounts this. DEADHEAT_DASHBOARD_ALLOW_REMOTE=1
-    # turns the check off, for a development server inside a container.
-    def self.local?(request)
-      return true if ENV["DEADHEAT_DASHBOARD_ALLOW_REMOTE"] == "1"
+    class << self
+      # Is this request from this computer?
+      # - The connection and the address Rails works out must both be loopback (`request.local?`).
+      # - If a proxy passed the request on, every address it lists must be loopback too. Rails trusts
+      #   private-network addresses there, which a visitor behind a local proxy could use to slip in.
+      # - The page must have been asked for by a local name, which stops another website from reaching
+      #   it through the browser (DNS rebinding).
+      # A request forwarded by something that adds no headers at all (an SSH tunnel, a port forward)
+      # looks local, so don't expose a development server that mounts this. DEADHEAT_DASHBOARD_ALLOW_REMOTE=1
+      # turns the check off, for a development server inside a container.
+      def local?(request)
+        return true if ENV["DEADHEAT_DASHBOARD_ALLOW_REMOTE"] == "1"
 
-      forwarded = request.get_header("HTTP_X_FORWARDED_FOR").to_s.split(/[\s,]+/).reject(&:empty?)
-      request.local? &&
-        forwarded.all? { |address| address.match?(LOOPBACK) } &&
-        request.get_header("HTTP_FORWARDED").nil? &&
-        request.host.to_s.match?(LOCAL_HOST)
+        forwarded = request.get_header("HTTP_X_FORWARDED_FOR").to_s.split(/[\s,]+/).reject(&:empty?)
+        request.local? &&
+          forwarded.all? { |address| address.match?(LOOPBACK) } &&
+          request.get_header("HTTP_FORWARDED").nil? &&
+          request.host.to_s.match?(LOCAL_HOST)
+      end
     end
   end
 

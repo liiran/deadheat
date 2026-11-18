@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Shop
   # 8. Tickets for an event with limited seats. Counts the tickets sold, then sells one.
   class TicketsController < ApplicationController

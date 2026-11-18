@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Fixed
   # 2. Fixed: marking the coupon used is the check. Only one request can change used_at from empty.
   class CouponsController < ApplicationController

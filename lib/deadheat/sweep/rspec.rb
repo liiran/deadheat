@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # Loaded with `rspec --require deadheat/sweep/rspec` by `deadheat sweep`, before rails_helper, so
 # this hook wraps everything else.
 require "deadheat"

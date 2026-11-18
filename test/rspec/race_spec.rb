@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require_relative "spec_helper"
 
 # Run by test/races/rspec_test.rb, which checks each example's outcome.

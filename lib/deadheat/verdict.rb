@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Deadheat
   # Decides what one simultaneous run means by comparing it with the one-at-a-time runs.
   #
@@ -13,8 +15,10 @@ module Deadheat
 
     attr_reader :status, :kind, :title, :lines, :irreversible, :expected, :table
 
-    def self.judge(outcome, serial:, singles:, schema:)
-      new(outcome, serial, singles, schema).tap(&:decide)
+    class << self
+      def judge(outcome, serial:, singles:, schema:)
+        new(outcome, serial, singles, schema).tap(&:decide)
+      end
     end
 
     def initialize(outcome, serial, singles, schema)
@@ -105,11 +109,11 @@ module Deadheat
         @table = table
         extra = @outcome.canon.tables.keys.select { |t| @outcome.canon.added_count(t) > expected.canon.added_count(t) }
         title = if extra.size > 1
-                  "Made twice: #{extra.map { |t| "#{@outcome.canon.added_count(t)} new #{t}" }.join(', ')}, where one at a time there are #{extra.map { |t| expected.canon.added_count(t) }.join(', ')}"
-                else
-                  have = @outcome.canon.added_count(table)
-                  want = expected.canon.added_count(table)
-                  "Made twice: #{have} new #{table} where one at a time there #{want == 1 ? 'is' : 'are'} #{want}"
+          "Made twice: #{extra.map { |t| "#{@outcome.canon.added_count(t)} new #{t}" }.join(', ')}, where one at a time there are #{extra.map { |t| expected.canon.added_count(t) }.join(', ')}"
+        else
+          have = @outcome.canon.added_count(table)
+          want = expected.canon.added_count(table)
+          "Made twice: #{have} new #{table} where one at a time there #{want == 1 ? 'is' : 'are'} #{want}"
                 end
         return set(:race, :made_twice, title, expected)
       end

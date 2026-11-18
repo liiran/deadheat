@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Fixed
   # 10. Fixed: the invite is locked while checking and using it.
   class InvitesController < ApplicationController

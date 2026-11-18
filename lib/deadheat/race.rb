@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Deadheat
   # Runs one race from start to finish:
   #
@@ -234,7 +236,7 @@ module Deadheat
     def rebuild(outcome)
       canon = Canon.build(@schema, @base, outcome.after, ignore: @ignore)
       Outcome.new(canon: canon, replies: outcome.replies, effects: outcome.effects, checks: outcome.checks,
-                  actors: outcome.actors, label: outcome.label, after: outcome.after).tap { |o| o.runners = outcome.runners }
+        actors: outcome.actors, label: outcome.label, after: outcome.after).tap { |o| o.runners = outcome.runners }
     end
 
     # Columns that differ between two identical one-at-a-time runs are random (tokens, UUIDs, times

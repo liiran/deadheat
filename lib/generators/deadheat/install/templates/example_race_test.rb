@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require_relative "race_helper"
 
 # A race test runs its actions at the same moment and fails if the result could never happen with

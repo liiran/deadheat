@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Fixed
   # 3. Fixed: the card is locked while checking and charging.
   class GiftCardsController < ApplicationController

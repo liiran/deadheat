@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require_relative "../test_helper"
 
 # The Minitest DSL as people write it: a Deadheat::RaceTest with `race` blocks. Each case defines a
@@ -6,7 +8,7 @@ class DslTest < DeadheatIntegrationTest
   def run_race_test(&body)
     klass = Class.new(Deadheat::RaceTest) do
       include Devise::Test::IntegrationHelpers
-      def self.name = "TemporaryRaceTest"
+      define_singleton_method(:name) { "TemporaryRaceTest" }
       class_eval(&body)
     end
     Minitest::Runnable.runnables.delete(klass) # not part of this suite's own run
@@ -58,8 +60,12 @@ class DslTest < DeadheatIntegrationTest
     results = run_race_test do
       race "who am I" do |r|
         r.setup { @team, @alice, @bob = test_case.make_team(budget: 100) }
-        r.as(:alice, sign_in: -> { @alice }) { post "/team/safe_spend", params: { amount: 1 }; seen << controller.current_member.email }
-        r.as(:bob, sign_in: -> { @bob }) { post "/team/safe_spend", params: { amount: 1 }; seen << controller.current_member.email }
+        r.as(:alice, sign_in: -> { @alice }) {
+          post "/team/safe_spend", params: { amount: 1 }
+          seen << controller.current_member.email }
+        r.as(:bob, sign_in: -> { @bob }) {
+          post "/team/safe_spend", params: { amount: 1 }
+          seen << controller.current_member.email }
       end
     end
     assert results.first.passed?, -> { results.first.failures.first&.message }
@@ -69,7 +75,9 @@ class DslTest < DeadheatIntegrationTest
 
   test "a sign-in hook is used when there's no helper Dead Heat knows" do
     calls = Concurrent::Array.new
-    Deadheat.config.sign_in { |user| calls << user.email; post "/members/sign_in", params: { member: { email: user.email, password: "password123" } } }
+    Deadheat.config.sign_in { |user|
+      calls << user.email
+      post "/members/sign_in", params: { member: { email: user.email, password: "password123" } } }
     test_case = self
     results = run_race_test do
       race "custom sign in" do |r|

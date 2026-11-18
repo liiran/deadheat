@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Shop
   # 4. Newsletter signup. The model validates the email is unique; the table has no unique index.
   class SubscribersController < ApplicationController

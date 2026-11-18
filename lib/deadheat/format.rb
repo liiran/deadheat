@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Deadheat
   # Text for the terminal and test failures.
   module Format
@@ -7,9 +9,9 @@ module Deadheat
       out = []
       broken = result.broken_tries
       head = if broken.positive?
-               "Race: “#{result.name}” broke in #{broken} of #{result.tries} tries"
-             else
-               "No race found in #{result.tries} tries: “#{result.name}”"
+        "Race: “#{result.name}” broke in #{broken} of #{result.tries} tries"
+      else
+        "No race found in #{result.tries} tries: “#{result.name}”"
              end
       out << "#{head} (seed #{result.seed}, #{result.database})"
       result.findings.each { |finding| out.concat(finding(finding, result)) }

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Deadheat
   # What a run changed in the database, written so that two runs that did the same thing come out
   # equal even though new rows got different ids and timestamps.
@@ -18,9 +20,11 @@ module Deadheat
 
     attr_reader :tables, :new_ids, :added_rows, :after
 
-    # ignore: a Set of "table.column" and "table.*" strings.
-    def self.build(schema, before, after, ignore: Set.new)
-      new(schema, before, after, ignore).tap(&:compute)
+    class << self
+      # ignore: a Set of "table.column" and "table.*" strings.
+      def build(schema, before, after, ignore: Set.new)
+        new(schema, before, after, ignore).tap(&:compute)
+      end
     end
 
     def initialize(schema, before, after, ignore)
@@ -272,7 +276,7 @@ module Deadheat
 
     def key_of(table, row)
       keys = @schema.key_columns(table)
-      keys.empty? ? canonical_row(table, row) : row.values_at(*keys).map(&:to_s).join("/")
+      keys.empty? ? canonical_row(table, row) : row.values_at(*keys).join("/")
     end
 
     def count(number, noun)

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Deadheat
   # Which tables were written while Dead Heat was watching, in any thread. Only these need to be put
   # back the way they were.

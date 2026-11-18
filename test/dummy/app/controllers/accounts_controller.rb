@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class AccountsController < ActionController::Base
   # BUG: the uniqueness validation checks, then inserts; with no unique index two signups both pass.
   def signup

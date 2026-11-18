@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Deadheat
   # Checks, before anything runs, that racing is safe here and that the results will mean something.
   # Every refusal says what to change.

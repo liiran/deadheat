@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require_relative "../test_helper"
 require "deadheat/engine"
 require "deadheat/sweep/runner"
@@ -59,7 +61,10 @@ class ReportAccessTest < Minitest::Test
 
   def test_old_runs_are_pruned_but_nothing_else
     runs = File.join(@root, "tmp/deadheat/runs")
-    5.times { |i| FileUtils.mkdir_p(File.join(runs, "2025010#{i}-000000")); File.write(File.join(runs, "2025010#{i}-000000/a.json"), "{}"); FileUtils.touch(File.join(runs, "2025010#{i}-000000"), mtime: Time.now - 1000 + i) }
+    5.times { |i|
+      FileUtils.mkdir_p(File.join(runs, "2025010#{i}-000000"))
+      File.write(File.join(runs, "2025010#{i}-000000/a.json"), "{}")
+      FileUtils.touch(File.join(runs, "2025010#{i}-000000"), mtime: Time.now - 1000 + i) }
     FileUtils.mkdir_p(File.join(runs, "my-notes"))
     FileUtils.mkdir_p(File.join(runs, "20240101-000000"))
     File.write(File.join(runs, "20240101-000000/keep.txt"), "not ours")
@@ -141,8 +146,8 @@ class ReportAccessTest < Minitest::Test
                 pauses: attack, count: attack, actors: [attack, "b"],
                 timeline: [{ actor: attack, kind: attack, sql: attack, tables: ["t"], at_ms: attack, source: attack, pause: attack, paused_ms: 3 }] }
     File.write(File.join(@run, "two.json"), JSON.generate(name: attack, location: attack, database: attack, tries: attack,
-                                                          counts: { race: 1 }, findings: [finding], reproduce: attack,
-                                                          sweep: { method: attack, route: attack, name: attack, file: attack }))
+      counts: { race: 1 }, findings: [finding], reproduce: attack,
+      sweep: { method: attack, route: attack, name: attack, file: attack }))
     File.write(File.join(@run, "sweep.json"), JSON.generate(seconds: attack, coverage: { share: 0.5, checked: attack, write_endpoints: attack }))
     page = Deadheat::Report.html(Deadheat::Report.load(@root))
     refute_includes page, "<script>"
@@ -174,7 +179,7 @@ class RegressionTestWriterTest < Minitest::Test
     out = StringIO.new
     runner = Deadheat::Sweep::Runner.new(root: Dir.mktmpdir, framework: "minitest", out: out, write_tests: false)
     summary = Deadheat::Sweep::Runner::Summary.new(results: [{ status: "unchecked", target: {} }], targets: [{}], requests: [{}], routes: [],
-                                                   coverage: { share: nil }, dir: Dir.mktmpdir, seconds: 1.0, errors: [])
+      coverage: { share: nil }, dir: Dir.mktmpdir, seconds: 1.0, errors: [])
     assert_equal 2, runner.exit_code(summary)
     FileUtils.mkdir_p(runner.instance_variable_get(:@dir))
     runner.send(:finish, summary)
@@ -226,11 +231,11 @@ class RedactTest < Minitest::Test
 
   def test_values_written_into_the_statement_are_hidden
     assert_equal "SELECT `users`.* FROM `users` WHERE `users`.`email` = [FILTERED] AND `users`.`id` = 5",
-                 Deadheat::SQL.readable({ sql: %q(SELECT `users`.* FROM `users` WHERE `users`.`email` = 'o\'brien@example.com' AND `users`.`id` = 5) })
+      Deadheat::SQL.readable({ sql: %q(SELECT `users`.* FROM `users` WHERE `users`.`email` = 'o\'brien@example.com' AND `users`.`id` = 5) })
     assert_equal "INSERT INTO `sessions` (`user_id`, `token`) VALUES ([FILTERED])",
-                 Deadheat::SQL.readable({ sql: "INSERT INTO `sessions` (`user_id`, `token`) VALUES (5, 'tok_123')" })
+      Deadheat::SQL.readable({ sql: "INSERT INTO `sessions` (`user_id`, `token`) VALUES (5, 'tok_123')" })
     assert_equal "INSERT INTO `orders` (`user_id`, `product_id`) VALUES (5, 37)",
-                 Deadheat::SQL.readable({ sql: "INSERT INTO `orders` (`user_id`, `product_id`) VALUES (5, 37)" })
+      Deadheat::SQL.readable({ sql: "INSERT INTO `orders` (`user_id`, `product_id`) VALUES (5, 37)" })
   end
 
   def test_changed_rows_saved_in_the_results_file_hide_those_columns
@@ -247,11 +252,11 @@ class RedactTest < Minitest::Test
 
   def test_a_hidden_column_named_anywhere_hides_every_quoted_value
     assert_equal "SELECT 1 FROM users WHERE lower(email) = lower([FILTERED])",
-                 Deadheat::SQL.readable({ sql: "SELECT 1 FROM users WHERE lower(email) = lower('Bob@Example.com')" })
+      Deadheat::SQL.readable({ sql: "SELECT 1 FROM users WHERE lower(email) = lower('Bob@Example.com')" })
     assert_equal "SELECT 1 FROM sessions WHERE token IN ([FILTERED], [FILTERED]) AND kind = [FILTERED]",
-                 Deadheat::SQL.readable({ sql: "SELECT 1 FROM sessions WHERE token IN ('a', 'b') AND kind = 'web'" })
+      Deadheat::SQL.readable({ sql: "SELECT 1 FROM sessions WHERE token IN ('a', 'b') AND kind = 'web'" })
     assert_equal "SELECT 1 FROM products WHERE name = 'email'", Deadheat::SQL.readable({ sql: "SELECT 1 FROM products WHERE name = 'email'" }),
-                 "a value that happens to be a column's name hides nothing"
+      "a value that happens to be a column's name hides nothing"
   end
 
   def test_extra_emails_hide_the_address_when_the_app_hides_emails

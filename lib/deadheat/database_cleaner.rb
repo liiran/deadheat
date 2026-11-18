@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Deadheat
   # Many apps wrap every test in DatabaseCleaner's :transaction strategy. Racing requests use their own
   # database connections and can't see rows inside that open transaction, so while Dead Heat races (a

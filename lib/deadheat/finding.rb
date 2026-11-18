@@ -1,8 +1,10 @@
+# frozen_string_literal: true
+
 module Deadheat
   # One kind of problem a race found, with the first try that showed it.
   class Finding
     attr_reader :status, :kind, :title, :lines, :why, :fixes, :irreversible, :try, :pauses,
-                :timeline, :replies, :expected_replies, :actors
+      :timeline, :replies, :expected_replies, :actors
     attr_accessor :count
 
     def initialize(verdict:, outcome:, actors:, try:, pauses:)

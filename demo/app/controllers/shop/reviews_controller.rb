@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Shop
   # 5. "Was this review helpful?" Adds one in Ruby and saves.
   class ReviewsController < ApplicationController

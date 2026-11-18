@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # The pages a shopper sees. Plain on purpose: Corner Store exists to show Dead Heat at work.
 class PagesController < ApplicationController
   allow_unauthenticated_access only: %i[home product]

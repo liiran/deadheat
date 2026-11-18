@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Deadheat
   # Runs actors on worker threads, each with its own database connection: all at once from a common
   # starting line, or one after another.
@@ -69,20 +71,18 @@ module Deadheat
 
     def perform(actor, barrier)
       Probe.with_actor(actor) do
-        begin
-          limit_lock_waits
-          barrier&.wait(@timeout)
-          delay = actor.schedule&.start_delay
-          sleep(delay) if delay
-          actor.t0 = Deadheat.now
-          actor.response = actor.block.call
-        rescue Exception => e # rubocop:disable Lint/RescueException -- assertions and app errors are results here
-          actor.error = e
-        ensure
-          actor.finished = Deadheat.now
-          restore_lock_waits
-          release_connections
-        end
+        limit_lock_waits
+        barrier&.wait(@timeout)
+        delay = actor.schedule&.start_delay
+        sleep(delay) if delay
+        actor.t0 = Deadheat.now
+        actor.response = actor.block.call
+      rescue Exception => e
+        actor.error = e
+      ensure
+        actor.finished = Deadheat.now
+        restore_lock_waits
+        release_connections
       end
     end
 

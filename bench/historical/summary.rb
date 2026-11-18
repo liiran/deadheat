@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # Prints what every try of a race test did, from the result file Dead Heat saved. A passing race test
 # prints nothing itself, so this is how "no race in N tries" is read:
 #

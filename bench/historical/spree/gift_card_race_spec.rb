@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # Spree 1ce4d2404 (March 2026) fixed a "gift card overspend race condition vulnerability": two orders
 # applying the same gift card at once could both take its whole balance. Spree's fix came with a spec
 # that starts five threads by hand; this is the same check as a Dead Heat race test.

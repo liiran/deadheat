@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # Corner Store: which tools catch the ten planted races, and which raise alarms on the fixed twins?
 #
 #   docker compose run --rm -e DB=postgres dev ruby bench/tools_bench.rb

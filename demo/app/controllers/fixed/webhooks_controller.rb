@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Fixed
   # 6. Fixed: marking the order paid is the check, and a unique index allows one shipment per order.
   class WebhooksController < ApplicationController

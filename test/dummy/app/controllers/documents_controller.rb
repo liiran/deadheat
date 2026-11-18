@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class DocumentsController < ActionController::Base
   # PROTECTED: optimistic locking turns the second of two simultaneous edits away with a 409.
   def rename

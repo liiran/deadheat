@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Deadheat
   # Turns the query timeline of a failing try into a sentence about what happened, and lays the
   # timeline out for people.

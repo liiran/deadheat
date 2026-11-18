@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "active_support"
 require "active_support/core_ext"
 require "active_record"
@@ -22,7 +24,7 @@ module Deadheat
 
   # Thrown into a test to end it early once Dead Heat has what it needs. It isn't a StandardError,
   # so the test's own `rescue => e` blocks don't swallow it.
-  class Stop < Exception; end # rubocop:disable Lint/InheritException
+  class Stop < Exception; end
 
   autoload :Config, "deadheat/config"
   autoload :SQL, "deadheat/sql"

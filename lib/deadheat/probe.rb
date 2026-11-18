@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Deadheat
   # The one listener on Rails' `sql.active_record` event. It does nothing outside a race. Inside a
   # racing thread it hands each query to that thread's actor (which records it and may pause), and in
@@ -29,14 +31,14 @@ module Deadheat
 
     def start(_name, _id, payload)
       Probe.current_actor&.query_started(payload)
-    rescue Exception => e # rubocop:disable Lint/RescueException -- never let our listener break the app's query
+    rescue Exception => e
       Deadheat.internal_error(e)
     end
 
     def finish(_name, _id, payload)
       Writes.note(payload) if Writes.tracking?
       Probe.current_actor&.query_finished(payload)
-    rescue Exception => e # rubocop:disable Lint/RescueException
+    rescue Exception => e
       Deadheat.internal_error(e)
     end
   end

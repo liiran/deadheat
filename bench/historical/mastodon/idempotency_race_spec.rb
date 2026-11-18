@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # Mastodon cff25c186 (February 2026) fixed a race "when processing statuses twice with the same
 # idempotency key": PostStatusService read the key from Redis, posted, and only then stored the key, so
 # a client retrying a post at the same moment published it twice. The check runs in Redis, so this

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "rails_helper"
 
 # The same kind of ordinary tests as test/integration, written as RSpec request specs. They all pass.

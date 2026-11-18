@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Deadheat
   # Decides, for each try, where requests should wait for a moment.
   #
@@ -68,11 +70,13 @@ module Deadheat
       @max_pause = max_pause
     end
 
-    def self.steps_from(actor)
-      actor.events.filter_map do |event|
-        next unless %i[read write].include?(event.kind) && event.key
+    class << self
+      def steps_from(actor)
+        actor.events.filter_map do |event|
+          next unless %i[read write].include?(event.kind) && event.key
 
-        Step.new(event.key, event.kind, event.tables, event.started - actor.t0)
+          Step.new(event.key, event.kind, event.tables, event.started - actor.t0)
+        end
       end
     end
 
@@ -157,11 +161,9 @@ module Deadheat
       reads.map(&:first)
     end
 
-
     def describe(step)
       number = step.key[/#(\d+)\z/, 1].to_i
       "its #{number.ordinalize} read of #{step.tables.join(', ')}"
     end
-
   end
 end

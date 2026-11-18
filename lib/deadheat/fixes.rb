@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Deadheat
   # The standard ways to fix each kind of race, in plain Rails.
   module Fixes

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Fixed
   # 9. Fixed: the database only takes the credit if it's there.
   class WalletsController < ApplicationController

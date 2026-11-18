@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Shop
   # 6. The payment provider says an order was paid. Webhooks can arrive more than once, sometimes at
   # the same moment. Checks the order isn't paid yet, then ships it.

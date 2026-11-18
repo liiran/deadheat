@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "erb"
 require "json"
 require "fileutils"
@@ -155,7 +157,7 @@ module Deadheat
       text[/(?:read|looked in) (\w+) before/, 1]
     end
 
-    TEMPLATE = <<~'ERB'.freeze
+    TEMPLATE = <<~'ERB'
       <!doctype html>
       <html lang="en">
       <head>

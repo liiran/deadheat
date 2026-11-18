@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # How often each planted bug shows up per try, with Dead Heat's pauses off and on. The bugs are the
 # ones in the gem's own test app (test/dummy), not Corner Store.
 #
@@ -9,12 +11,33 @@ require_relative "../test/test_helper"
 require "fileutils"
 
 SCENARIOS = {
-  "last item bought twice" => ->(r) { r.setup { @product = Product.create!(name: "Shirt", stock: 1) }; r.twice { post "/buy/#{@product.id}" } },
-  "likes counter" => ->(r) { r.setup { @post = Post.create!(title: "Hi") }; r.twice { post "/like/#{@post.id}" } },
-  "signup without unique index" => ->(r) { r.twice { post "/signup", params: { email: "sam@example.com" } } },
-  "follow hits unique index" => ->(r) { r.twice { post "/follow", params: { user_id: 1, target_id: 2 } } },
-  "tag check-then-insert" => ->(r) { r.setup { @post = Post.create!(title: "Hi") }; r.twice { post "/tag", params: { post_id: @post.id, tag: "ruby" } } },
-  "service lost update" => ->(r) { r.setup { @post = Post.create!(title: "Hi") }; 2.times { r.run { p = Post.find(@post.id); p.update!(likes_count: p.likes_count + 1) } } }
+  "last item bought twice" => lambda do |r|
+    r.setup { @product = Product.create!(name: "Shirt", stock: 1) }
+    r.twice { post "/buy/#{@product.id}" }
+  end,
+  "likes counter" => lambda do |r|
+    r.setup { @post = Post.create!(title: "Hi") }
+    r.twice { post "/like/#{@post.id}" }
+  end,
+  "signup without unique index" => lambda do |r|
+    r.twice { post "/signup", params: { email: "sam@example.com" } }
+  end,
+  "follow hits unique index" => lambda do |r|
+    r.twice { post "/follow", params: { user_id: 1, target_id: 2 } }
+  end,
+  "tag check-then-insert" => lambda do |r|
+    r.setup { @post = Post.create!(title: "Hi") }
+    r.twice { post "/tag", params: { post_id: @post.id, tag: "ruby" } }
+  end,
+  "service lost update" => lambda do |r|
+    r.setup { @post = Post.create!(title: "Hi") }
+    2.times do
+      r.run do
+        post = Post.find(@post.id)
+        post.update!(likes_count: post.likes_count + 1)
+      end
+    end
+  end,
 }.freeze
 
 class PausesBench < DeadheatIntegrationTest

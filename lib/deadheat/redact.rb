@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Deadheat
   # Dead Heat shows queries and changed values in its messages, result files and report. Columns the
   # app already hides from its own logs (`config.filter_parameters`, which Rails also applies to
@@ -7,7 +9,7 @@ module Deadheat
   # This is a best effort, like the log filter it follows: it goes by column names, so a secret in a
   # column the app doesn't filter, or in a URL, is shown as it is.
   module Redact
-    MASK = "[FILTERED]".freeze
+    MASK = "[FILTERED]"
     IDENTIFIER = /[`"\[]?(\w+)[`"\]]?/
     STRING = /'(?:[^'\\]|\\.|'')*'/
 

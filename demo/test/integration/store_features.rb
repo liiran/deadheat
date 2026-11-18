@@ -1,14 +1,18 @@
+# frozen_string_literal: true
+
 # One ordinary test per feature, the kind any app already has. They all pass: sending one request at a
 # time, every feature works. ShopTest runs them against the store, FixedShopTest against the fixed
 # twins under /fixed.
 module StoreFeatures
   extend ActiveSupport::Concern
 
-  # Five features have a limit: stock, a card's balance, seats, store credit, an invite's uses.
-  # These tests sit right at it (the last shirt, the last seat), which is what lets a request sent
-  # twice cross it. ROOM=1 runs them with room to spare instead. bench/tools_bench.rb measures the
-  # sweep both ways, to show which races it finds only from a test at the limit.
-  def self.roomy? = ENV["ROOM"] == "1"
+  class << self
+    # Five features have a limit: stock, a card's balance, seats, store credit, an invite's uses.
+    # These tests sit right at it (the last shirt, the last seat), which is what lets a request sent
+    # twice cross it. ROOM=1 runs them with room to spare instead. bench/tools_bench.rb measures the
+    # sweep both ways, to show which races it finds only from a test at the limit.
+    def roomy? = ENV["ROOM"] == "1"
+  end
 
   included do
     setup { sign_in_as users(:one) }

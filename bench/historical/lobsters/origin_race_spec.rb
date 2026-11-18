@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # Lobsters 8d601f12d (Dec 2024) fixed a race in Domain#find_or_create_origin: two stories from the
 # same new origin at once could both try to insert it, and the unique index stopped the second with an
 # unhandled ActiveRecord::RecordNotUnique. Lobsters' own draft spec for it is in 7cc3c14ed; this is the

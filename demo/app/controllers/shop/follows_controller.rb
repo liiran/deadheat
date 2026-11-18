@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Shop
   # 7. Following a store. Looks for an existing follow, creates one if there isn't.
   class FollowsController < ApplicationController

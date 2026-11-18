@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Deadheat
   # Things a run did outside the database that can't be taken back: emails delivered, background
   # jobs queued and HTTP calls to other services (seen through WebMock when the app uses it).
@@ -6,22 +8,24 @@ module Deadheat
     # any duplicate email or outside POST/PUT/PATCH/DELETE, is labelled "irreversible".
     IRREVERSIBLE_WORDS = %w[mail email charg pay refund captur ship fulfil deliver notif webhook sms push invoic transfer].freeze
 
-    # Goes by the words in the job's name: ShipOrderJob and OrderMailer count, MembershipJob doesn't.
-    def self.irreversible_job?(name)
-      words = name.to_s.scan(/[A-Z]?[a-z]+|[A-Z]+(?![a-z])/).map(&:downcase)
-      words.any? { |word| IRREVERSIBLE_WORDS.any? { |stem| word.start_with?(stem) } }
-    end
-
     attr_reader :mails, :jobs, :http
 
-    def self.watch
-      marks = { mails: mail_count, jobs: job_count, http: http_counts }
-      yield
-      new(
-        mails: new_mails(marks[:mails]),
-        jobs: new_jobs(marks[:jobs]),
-        http: new_http(marks[:http])
-      )
+    class << self
+      # Goes by the words in the job's name: ShipOrderJob and OrderMailer count, MembershipJob doesn't.
+      def irreversible_job?(name)
+        words = name.to_s.scan(/[A-Z]?[a-z]+|[A-Z]+(?![a-z])/).map(&:downcase)
+        words.any? { |word| IRREVERSIBLE_WORDS.any? { |stem| word.start_with?(stem) } }
+      end
+
+      def watch
+        marks = { mails: mail_count, jobs: job_count, http: http_counts }
+        yield
+        new(
+          mails: new_mails(marks[:mails]),
+          jobs: new_jobs(marks[:jobs]),
+          http: new_http(marks[:http])
+        )
+      end
     end
 
     def initialize(mails: [], jobs: [], http: [])
@@ -113,7 +117,7 @@ module Deadheat
 
         adapter.enqueued_jobs.drop(mark).map do |job|
           name = job[:job].to_s
-          name = "#{job[:args].first.to_s}##{job[:args][1]}" if name == "ActionMailer::MailDeliveryJob" && job[:args].is_a?(Array)
+          name = "#{job[:args].first}##{job[:args][1]}" if name == "ActionMailer::MailDeliveryJob" && job[:args].is_a?(Array)
           [name, job[:args].to_json.to_s[0, 200]]
         end
       end

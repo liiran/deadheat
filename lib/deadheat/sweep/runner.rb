@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "deadheat"
 require "fileutils"
 require "open3"
@@ -54,7 +56,7 @@ module Deadheat
         # Only requests that really were raced count as checked.
         checked = results.reject { |r| r[:status] == "unchecked" }.map { |r| r[:target] }
         summary = Summary.new(results: results, targets: targets, requests: requests, routes: routes,
-                              coverage: coverage(routes, checked), dir: @dir, seconds: elapsed(started), errors: errors)
+          coverage: coverage(routes, checked), dir: @dir, seconds: elapsed(started), errors: errors)
         finish(summary)
         summary
       end
@@ -264,11 +266,11 @@ module Deadheat
         unchecked = summary.results.count { |r| r[:status] == "unchecked" }
         say "  ? #{count(unchecked, 'endpoint')} couldn't be checked" if unchecked.positive?
         verdict = if races.any?
-                    "#{count(races.size, 'race')} found#{" (#{irreversible} with side effects that can't be undone)" if irreversible.positive?}"
-                  elsif unchecked == summary.results.size
-                    "Nothing could be checked"
-                  else
-                    "No races found"
+          "#{count(races.size, 'race')} found#{" (#{irreversible} with side effects that can't be undone)" if irreversible.positive?}"
+        elsif unchecked == summary.results.size
+          "Nothing could be checked"
+        else
+          "No races found"
                   end
         say "#{verdict} in #{format_duration(summary.seconds)}."
         written = @write_tests ? write_regression_tests(races) : []

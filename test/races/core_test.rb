@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require_relative "../test_helper"
 
 # Every planted bug in the dummy app must be found, every fixed twin must pass, on every database.
@@ -111,7 +113,10 @@ class CoreRaceTest < DeadheatIntegrationTest
   test "jobs and service code can race too" do
     result = race("service") do |r|
       r.setup { @post = Post.create!(title: "Hi") }
-      2.times { r.run { post = Post.find(@post.id); post.update!(likes_count: post.likes_count + 1) } }
+      2.times {
+        r.run {
+                  post = Post.find(@post.id)
+                  post.update!(likes_count: post.likes_count + 1) } }
     end
     assert_equal [:lost_update], kinds(result), result.failure_message
   end

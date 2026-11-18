@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class TeamsController < ActionController::Base
   before_action :authenticate_member!
 

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Deadheat
   # Settings, all optional. Set them in test/races/race_helper.rb (or spec/races/race_helper.rb):
   #

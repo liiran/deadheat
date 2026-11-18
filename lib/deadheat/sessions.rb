@@ -1,12 +1,16 @@
+# frozen_string_literal: true
+
 module Deadheat
   # Gives every racing actor its own browser session (cookies, signed-in user) and puts that session
   # back to the same starting point before each try.
   class Sessions
     Prepared = Struct.new(:spec, :session, :cookies)
 
-    def self.label_for(record)
-      name = %i[name username email login].reject { |attribute| Redact.hidden?(attribute) }.lazy.map { |attribute| record.try(attribute) }.find(&:present?)
-      name ? name.to_s : "#{record.class.model_name.human.downcase} #{record.id}"
+    class << self
+      def label_for(record)
+        name = %i[name username email login].reject { |attribute| Redact.hidden?(attribute) }.lazy.map { |attribute| record.try(attribute) }.find(&:present?)
+        name ? name.to_s : "#{record.class.model_name.human.downcase} #{record.id}"
+      end
     end
 
     def initialize(context, specs)

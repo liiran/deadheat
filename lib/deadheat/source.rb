@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Deadheat
   # Finds the line of the app's own code that sent a query, the same way Rails' verbose query logs do.
   module Source

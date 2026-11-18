@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Fixed
   # 4. Fixed: a unique index stops the duplicate, and the conflict is answered like the validation.
   class SubscribersController < ApplicationController

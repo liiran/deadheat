@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Shop
   # 2. A one-use coupon. Checks it hasn't been used, then marks it used.
   class CouponsController < ApplicationController

@@ -1,10 +1,12 @@
+# frozen_string_literal: true
+
 module Deadheat
   # One side of a race: a request (or job, or any block) that runs in its own thread with its own
   # database connection. It records every query it sends and, when the pause plan says so, waits a
   # moment right after a read or right before a write.
   class Actor
     Event = Struct.new(:actor, :seq, :kind, :sql, :tables, :locking, :key, :started, :ms, :source,
-                       :rows, :done, :paused_after, :paused_before, keyword_init: true) do
+      :rows, :done, :paused_after, :paused_before, keyword_init: true) do
       def to_h
         super.merge(tables: tables.to_a)
       end
@@ -78,7 +80,7 @@ module Deadheat
       return nil if kind == :other
 
       Event.new(actor: name, kind: kind, sql: SQL.readable(payload), tables: SQL.tables(sql, kind),
-                locking: kind == :read && SQL.locking?(sql))
+        locking: kind == :read && SQL.locking?(sql))
     end
 
     # "the 2nd read of products": stable between runs even if other queries come and go.

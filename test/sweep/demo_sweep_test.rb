@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "minitest/autorun"
 require "json"
 require "open3"
@@ -42,6 +44,7 @@ class DemoSweepTest < Minitest::Test
     assert_operator shop.count { |r| r["irreversible"] }, :>=, 2, output
     assert summary.dig("coverage", "share").to_f > 0.7, summary["coverage"].inspect
   end
+
   def test_rspec_request_specs_too
     output, status, summary = sweep("--rspec")
     assert_equal 1, status.exitstatus, output

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class ShopController < ActionController::Base
   # BUG: reads the stock, decides, then writes it back. Two buyers can both see "1 left".
   def buy

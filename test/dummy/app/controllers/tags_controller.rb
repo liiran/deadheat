@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class TagsController < ActionController::Base
   # BUG on a table without a primary key: check, then insert.
   def tag

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class LikesController < ActionController::Base
   # BUG: adds one in Ruby and saves; two likes at once save the same number.
   def like

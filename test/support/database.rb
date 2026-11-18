@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # A fresh, empty database with the dummy app's schema. Shared by the Minitest and RSpec suites.
 db_config = ActiveRecord::Base.connection_db_config
 $stdout.then do |out|

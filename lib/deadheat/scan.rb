@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "prism"
 require "active_support"
 require "active_support/core_ext/string/inflections"

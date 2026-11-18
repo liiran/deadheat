@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Deadheat
   # Reads just enough of a SQL statement to know whether it reads or writes, and which tables.
   module SQL

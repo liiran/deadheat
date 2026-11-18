@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Fixed
   # 5. Fixed: the database adds one.
   class ReviewsController < ApplicationController

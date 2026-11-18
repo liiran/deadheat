@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class FollowsController < ActionController::Base
   # CRASH: the unique index keeps the data right, but the second request gets a 500.
   def follow

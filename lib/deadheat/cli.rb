@@ -1,9 +1,11 @@
+# frozen_string_literal: true
+
 require "optparse"
 
 module Deadheat
   # bin/deadheat: sweep, scan and report. Run it from the app's root folder.
   class CLI
-    USAGE = <<~TEXT.freeze
+    USAGE = <<~TEXT
       Dead Heat finds the bugs that only happen when two requests arrive at once.
 
       Usage:
@@ -21,8 +23,10 @@ module Deadheat
       A test location works as a path too: bin/deadheat sweep test/integration/checkout_test.rb:12
     TEXT
 
-    def self.start(argv = ARGV, out: $stdout)
-      new(argv, out).run
+    class << self
+      def start(argv = ARGV, out: $stdout)
+        new(argv, out).run
+      end
     end
 
     def initialize(argv, out)

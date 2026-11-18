@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # Store admin. These write endpoints have no tests yet, so the sweep can't reach them; they show up
 # in its coverage number.
 class AdminController < ApplicationController

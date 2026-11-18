@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Shop
   # 10. An invite code that works a limited number of times. Checks the uses, then joins.
   class InvitesController < ApplicationController

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Deadheat
   # The sweep: no race tests to write. It runs your request and integration tests in two passes.
   #

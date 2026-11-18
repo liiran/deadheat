@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require_relative "../test_helper"
 require "open3"
 
@@ -8,7 +10,7 @@ class RSpecSupportTest < ActiveSupport::TestCase
     env = { "DEADHEAT_DB_NAME" => "deadheat_rspec_test" }
     FileUtils.rm_f(out) # never read the file of an earlier run
     _stdout, stderr, _status = Open3.capture3(env, Gem.ruby, "-S", "rspec", "test/rspec/race_spec.rb", "--order", "defined", "--format", "json", "--out", out,
-                                              chdir: File.expand_path("../..", __dir__))
+      chdir: File.expand_path("../..", __dir__))
     assert File.exist?(out), "rspec wrote no results:\n#{stderr}"
     examples = JSON.parse(File.read(out))["examples"].to_h { |e| [e["description"], e] }
     assert_equal 6, examples.size, stderr

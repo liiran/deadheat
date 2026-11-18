@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Shop
   # 3. Paying with a gift card. Checks the balance, then subtracts in Ruby.
   class GiftCardsController < ApplicationController

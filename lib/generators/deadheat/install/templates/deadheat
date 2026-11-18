@@ -1,4 +1,6 @@
 #!/usr/bin/env ruby
+# frozen_string_literal: true
+
 # Dead Heat: finds the bugs that only happen when two requests arrive at once.
 #   bin/deadheat sweep | scan | report      (bin/deadheat --help for more)
 require_relative "../config/boot"

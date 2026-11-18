@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Deadheat
   class Railtie < Rails::Railtie
     # The sign-in warm-up endpoint, in the test environment only. It goes right after Warden when

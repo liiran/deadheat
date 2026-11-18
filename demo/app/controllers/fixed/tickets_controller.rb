@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Fixed
   # 8. Fixed: the event row is locked while counting and selling.
   class TicketsController < ApplicationController

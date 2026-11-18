@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Shop
   # 9. Withdrawing store credit. Checks the balance in Ruby; the decrement itself is atomic, which
   # makes this look safe.

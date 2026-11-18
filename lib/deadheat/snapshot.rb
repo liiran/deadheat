@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Deadheat
   # Every row of the tables it covers, plus the id counters, taken with the query cache off. A
   # snapshot can be put back: rows deleted and re-inserted with the same ids, counters reset. That's
@@ -7,12 +9,14 @@ module Deadheat
 
     attr_reader :rows, :sequences, :tables
 
-    def self.take(schema, tables = schema.tables)
-      connection = schema.connection
-      rows = ActiveRecord::Base.uncached do
-        tables.to_h { |table| [table, connection.select_all("SELECT * FROM #{connection.quote_table_name(table)}").to_a] }
+    class << self
+      def take(schema, tables = schema.tables)
+        connection = schema.connection
+        rows = ActiveRecord::Base.uncached do
+          tables.to_h { |table| [table, connection.select_all("SELECT * FROM #{connection.quote_table_name(table)}").to_a] }
+        end
+        new(schema, tables, rows, Sequences.read(connection, schema, tables))
       end
-      new(schema, tables, rows, Sequences.read(connection, schema, tables))
     end
 
     def initialize(schema, tables, rows, sequences)

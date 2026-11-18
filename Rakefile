@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "rake/testtask"
 
 DATABASES = %w[sqlite postgres mysql].freeze

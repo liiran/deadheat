@@ -1,4 +1,6 @@
 #!/usr/bin/env ruby
+# frozen_string_literal: true
+
 # Finds the bugs in a Rails app that only happen when two requests arrive at once.
 # Run `deadheat --help` from the app's root folder.
 require "deadheat"

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require_relative "../test_helper"
 
 class SQLTest < Minitest::Test
@@ -113,5 +115,52 @@ class PausePlanTest < Minitest::Test
   def test_the_same_seed_gives_the_same_pauses
     assert_equal plan(11).for_try(3).last, plan(11).for_try(3).last
     refute_equal plan(11).for_try(3).last, plan(12).for_try(3).last
+  end
+end
+
+class CLITest < Minitest::Test
+  def run_cli(*argv)
+    require "deadheat/cli"
+    out = StringIO.new
+    [Deadheat::CLI.start(argv, out: out), out.string]
+  end
+
+  def test_help_and_version
+    status, text = run_cli("--help")
+    assert_equal 0, status
+    assert_includes text, "bin/deadheat sweep"
+    status, text = run_cli("--version")
+    assert_equal 0, status
+    assert_equal "deadheat #{Deadheat::VERSION}\n", text
+  end
+
+  def test_an_unknown_command_is_an_error
+    status, text = run_cli("frobnicate")
+    assert_equal 64, status
+    assert_includes text, "Unknown command"
+  end
+
+  def test_scan_reads_a_file_and_lists_suspects
+    Dir.mktmpdir do |dir|
+      File.write(File.join(dir, "likes.rb"), "def like\n  post = Post.find(1)\n  post.update!(likes: post.likes + 1)\nend\n")
+      previous = Deadheat.config.results_dir
+      Deadheat.config.results_dir = File.join(dir, "out")
+      status, text = Dir.chdir(dir) { run_cli("scan", "likes.rb") }
+      Deadheat.config.results_dir = previous
+      assert_equal 0, status
+      assert_includes text, "1 suspect in 1 file"
+      assert File.exist?(File.join(dir, "out/scan.json"))
+    end
+  end
+
+  def test_report_without_results_says_so
+    Dir.mktmpdir do |dir|
+      previous = Deadheat.config.results_dir
+      Deadheat.config.results_dir = File.join(dir, "none")
+      status, text = Dir.chdir(dir) { run_cli("report") }
+      Deadheat.config.results_dir = previous
+      assert_equal 1, status
+      assert_includes text, "No results yet"
+    end
   end
 end
