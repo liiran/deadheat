@@ -75,8 +75,17 @@ vulnerability" in March 2026. Two orders using one gift card at once could each 
 Dead Heat's scan points at the cause in the code before the fix: `gift_card.lock!` called outside a
 transaction, which releases the lock right away.
 
-**All together:** 3 of 3 real, fixed race bugs reproduced before their fixes, no race found after the
-fixes that worked, and the one fix that didn't work was caught. A zero-setup sweep of today's Lobsters
+**And Mastodon.** [Mastodon](https://github.com/mastodon/mastodon) fixed a race in February 2026: a client
+retrying a post at the same moment published it twice. Its duplicate check is in Redis, so the race test
+clears Redis before each run with `r.reset { … }`.
+
+| Mastodon code | Dead Heat |
+| --- | --- |
+| Before the fix (`f7bf804a`) | broke in **18 of 20** tries (the same post published twice) |
+| The fix (`cff25c18`) | no race in **40** tries |
+
+**All together:** 4 of 4 real, fixed race bugs reproduced before their fixes, in three well-known apps.
+No race was found after the fixes that worked, and the one fix that didn't work was caught. A zero-setup sweep of today's Lobsters
 (its 171 request specs pass), and the Spree race test, also turned up races that are still in their
 code. Details of unfixed races aren't published here. All of this is in [`bench/results.md`](bench/results.md), with the
 commands to rerun it.
@@ -146,7 +155,9 @@ end
 RSpec works the same way with `RSpec.describe "Checkout", type: :race do … end`. `r.as(user)` signs the
 user in for that request's own session: Devise and Rails 8's `sign_in_as` work as they are; anything
 else is one line in `race_helper.rb`. The `check` is optional: without it, Dead Heat already compares
-the data, the replies, the emails and the jobs with every one-at-a-time order.
+the data, the replies, the emails and the jobs with every one-at-a-time order. Dead Heat restores the
+database before every run. For state it can't see, such as Redis keys or `Rails.cache`, add
+`r.reset { Rails.cache.clear }`, or `Deadheat.configure { |c| c.reset { … } }` for every race.
 
 When a race test fails, the message tells the whole story:
 
@@ -180,7 +191,8 @@ Nothing here touches database internals. It's ordinary Ruby and Rails:
 
 1. **Racing for real.** Each request runs in its own thread with its own database connection, and they
    start together from a starting line. Ruby lets threads run while one waits on the database, so the
-   queries really overlap.
+   queries really overlap. The threads live for the whole race and are reused every run, like Puma's,
+   so anything an app keeps per thread behaves as it does in production.
 2. **Small, targeted pauses.** Two requests started together still usually finish one after the other:
    each takes only milliseconds. So Dead Heat first watches a one-at-a-time run and finds each read that
    is followed by a write to the same table, like "read the stock, then save the stock". In each try it

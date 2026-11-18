@@ -103,9 +103,15 @@ module Deadheat
       table = more_rows_table(expected)
       if table
         @table = table
-        have = @outcome.canon.added_count(table)
-        want = expected.canon.added_count(table)
-        return set(:race, :made_twice, "Made twice: #{have} new #{table} where one at a time there #{want == 1 ? 'is' : 'are'} #{want}", expected)
+        extra = @outcome.canon.tables.keys.select { |t| @outcome.canon.added_count(t) > expected.canon.added_count(t) }
+        title = if extra.size > 1
+                  "Made twice: #{extra.map { |t| "#{@outcome.canon.added_count(t)} new #{t}" }.join(', ')}, where one at a time there are #{extra.map { |t| expected.canon.added_count(t) }.join(', ')}"
+                else
+                  have = @outcome.canon.added_count(table)
+                  want = expected.canon.added_count(table)
+                  "Made twice: #{have} new #{table} where one at a time there #{want == 1 ? 'is' : 'are'} #{want}"
+                end
+        return set(:race, :made_twice, title, expected)
       end
 
       lost = lost_update(expected)

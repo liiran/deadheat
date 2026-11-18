@@ -59,6 +59,18 @@ class ScanTest < Minitest::Test
     assert_equal [:check_then_act], rules(code)
   end
 
+  def test_hashes_errors_and_nil_checks_are_not_database_reads
+    code = <<~RUBY
+      def call
+        @options.delete(:spoiler) if @options[:sensitive].nil?
+        raise UnexpectedMentionsError.new("x", []) unless unexpected_accounts.empty?
+        Quote.create!(status: @status) unless @quoted_status.nil?
+        name = "a" + "b"
+      end
+    RUBY
+    assert_empty rules(code)
+  end
+
   def test_with_lock_is_safe
     code = <<~RUBY
       def buy

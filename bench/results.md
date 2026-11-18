@@ -83,6 +83,34 @@ Dead Heat's scan, run on the code before the fix with no database, flags the cau
 While setting this up, Dead Heat also found a second, unrelated race in the same service, which is
 still in Spree's code. Its details aren't published here.
 
+## 2c. Mastodon: the same post published twice
+
+[Mastodon](https://github.com/mastodon/mastodon) fixed a race "when processing statuses twice with the
+same idempotency key" in February 2026 (`cff25c186`). `PostStatusService` read the key from Redis,
+published the post, and only then stored the key. A client retrying a post at the same moment published
+it twice.
+
+The check lives in Redis, which Dead Heat doesn't restore, so the race test clears Redis before every run
+with `r.reset { … }` ([`historical/mastodon/idempotency_race_spec.rb`](historical/mastodon/idempotency_race_spec.rb)).
+
+```
+docker compose --profile apps up -d redis
+docker compose --profile apps run --rm dev sh bench/historical/run.sh mastodon <commit> spec/races/idempotency_race_spec.rb
+```
+
+| Commit | Dead Heat |
+| --- | --- |
+| `f7bf804a` (before the fix) | broke in **18 of 20** tries: 2 statuses, the account's count up by 2 |
+| `cff25c18` (the fix: a Redis lock around the check) | **no race in 40 tries** |
+
+**What Mastodon taught Dead Heat.** Mastodon keeps a Redis connection in `Thread.current` for a thread's
+whole life, as apps on Puma may. Dead Heat used to start fresh threads for every run, which stranded one
+of those connections per thread until the pool ran dry. It now keeps one long-lived worker thread per
+racing request for the whole race, like Puma.
+
+The scan doesn't flag this race: the check is in Redis, not in the database or in Active Record calls it
+reads.
+
 ## 3. Lobsters: sweeping the whole app with no setup
 
 **Lobsters at `7cc3c14ed`** (MariaDB, 97 request specs pass):

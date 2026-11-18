@@ -121,9 +121,11 @@ module Deadheat
             @context.instance_exec(&definition.setup_block) if definition.setup_block
             @sessions = Sessions.new(@context, definition.actors)
             @base = Snapshot.take(@schema)
+            @racer = Racer.new(definition.actors.size, timeout: @config.try_timeout, lock_timeout: @config.lock_timeout)
             result = race(definition, tries, started)
           end
         ensure
+          @racer&.stop
           original.restore(Writes.tables)
         end
       end
@@ -202,9 +204,9 @@ module Deadheat
       actors.each_with_index { |actor, i| actor.schedule = schedules&.[](i) }
       effects = Effects.watch do
         if order == :together
-          Racer.together(actors, timeout: @config.try_timeout, lock_timeout: @config.lock_timeout)
+          @racer.together(actors)
         else
-          Racer.one_by_one(order.map { |i| actors[i] }, timeout: @config.try_timeout, lock_timeout: @config.lock_timeout)
+          @racer.one_by_one(order.map { |i| actors[i] }, order)
         end
       end
       ran = only ? [actors[only]] : actors

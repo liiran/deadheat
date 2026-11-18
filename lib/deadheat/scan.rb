@@ -39,7 +39,7 @@ module Deadheat
     CREATES = %i[create create! insert insert! new build].freeze
     COUNTS = %i[count size length exists? any? none? empty? sum].freeze
     FINDS = %i[find_by find_by! first take last].freeze
-    STATE_CHECKS = %i[valid? invalid? persisted? new_record? destroyed? changed? errors frozen? readonly? previously_new_record?].freeze
+    STATE_CHECKS = %i[valid? invalid? persisted? new_record? destroyed? changed? errors frozen? readonly? previously_new_record? nil? present? blank? empty? any? none? []].freeze
     # Writes that are safe on their own: the database does the arithmetic.
     ATOMIC = %i[increment! decrement! update_counters increment_counter decrement_counter upsert upsert_all].freeze
 
@@ -339,7 +339,11 @@ module Deadheat
         end
 
         chain = chain_names(node)
-        if CREATES.include?(node.name) && (node.receiver.is_a?(Prism::ConstantReadNode) || node.receiver.is_a?(Prism::ConstantPathNode) || association?(node.receiver))
+        constant_receiver = node.receiver.is_a?(Prism::ConstantReadNode) || node.receiver.is_a?(Prism::ConstantPathNode)
+        # `SomeError.new` isn't a row; on a class only create/insert write one. `.new`/`.build` count
+        # on an association (`event.tickets.build`), which is then saved.
+        creates_row = constant_receiver ? %i[create create! insert insert!].include?(node.name) : association?(node.receiver)
+        if CREATES.include?(node.name) && creates_row
           vars = argument_variables(node) + [variable(root_receiver(node))].compact
           constant = constant_name(root_receiver(node))
           model = constant || node.receiver.slice
@@ -371,7 +375,7 @@ module Deadheat
           next unless key && value.is_a?(Prism::CallNode) && %i[+ -].include?(value.name)
 
           read = value.receiver
-          read_var = variable(read&.receiver)
+          read_var = read.is_a?(Prism::CallNode) ? variable(read.receiver) : nil
           next unless read.is_a?(Prism::CallNode) && read.name.to_s == key && read_var
 
           next if var && read_var != var && node.name != :update_all
