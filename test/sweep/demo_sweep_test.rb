@@ -33,9 +33,9 @@ class DemoSweepTest < Minitest::Test
     fixed = results.select { |r| r.dig("target", "route").to_s.start_with?("/fixed") }
     found = shop.select { |r| r["status"] == "race" }.map { |r| r.dig("target", "route") }.sort
 
-    # Rails 8 runs SQLite writes with BEGIN IMMEDIATE, so the newsletter's validate-then-insert,
-    # all inside one transaction, really can't race there.
-    expected = DB == "sqlite" ? 9 : 10
+    # Rails 8 runs SQLite writes with BEGIN IMMEDIATE, so a uniqueness validation and its insert, all
+    # inside one transaction, really can't race there. That takes out the newsletter and the follow.
+    expected = DB == "sqlite" ? 8 : 10
     assert_equal expected, found.size, "found #{found.inspect}\n#{output}"
     assert_equal 10, fixed.size, output
     assert_empty fixed.reject { |r| r["status"] == "ok" }, "false alarms:\n#{output}"
@@ -48,7 +48,8 @@ class DemoSweepTest < Minitest::Test
     assert_equal "rspec", summary["framework"]
     races = summary["results"].select { |r| r["status"] == "race" }.map { |r| r.dig("target", "route") }
     fixed = summary["results"].select { |r| r.dig("target", "route").to_s.start_with?("/fixed") }
-    assert_equal 4, races.size, output
+    # The four specs are buy, coupon, wallet and follow. The follow can't race on SQLite (see above).
+    assert_equal DB == "sqlite" ? 3 : 4, races.size, output
     assert(races.none? { |route| route.start_with?("/fixed") }, output)
     assert_equal 4, fixed.size, output
   end

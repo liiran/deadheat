@@ -42,8 +42,14 @@ docker compose run --rm -w /deadheat/demo dev bin/deadheat report  # writes tmp/
 
 Add `-e DB=postgres` or `-e DB=mysql` after `run --rm` to use one of those instead of SQLite.
 
-The sweep finds the ten races under `/` and none under `/fixed`. On SQLite it finds nine: Rails 8 lets
-only one SQLite write transaction run at a time, so the newsletter race (number 4) can't happen there.
+The sweep finds the ten races under `/` and none under `/fixed`. On SQLite it finds eight: Rails 8 lets
+only one SQLite write transaction run at a time, so the two races that depend on a uniqueness validation
+(the newsletter, number 4, and the follow, number 7) can't happen there.
+
+Five of the features have a limit (stock, a card's balance, seats, store credit, an invite's uses), and
+their tests sit right at it: the last shirt, the last seat. That is what lets the same request, sent
+twice, cross the limit. `ROOM=1 bin/deadheat sweep` runs the tests with room to spare instead, and the
+sweep then finds seven (five on SQLite): it can no longer see the seats, the store credit and the invite.
 
 The same tests exist as RSpec request specs in `spec/requests/` (`bin/deadheat sweep --rspec`).
 
