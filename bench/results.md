@@ -1,6 +1,8 @@
 # Results
 
-Every number here comes from a run of a script in this folder; the command is next to it. Runs were on
+Every number here comes from a run of a script in this folder; the command is next to it. Where a
+result was measured in more than one run, it's given as a range: timing bugs don't show the same number
+of times in every run. Runs were on
 a Windows 11 desktop (Ryzen 5 9600X) with everything in Docker: Ruby 3.4 (Ruby 4.0 for today's
 Lobsters), Rails 8.1, PostgreSQL 17, MySQL 8.4, MariaDB 11.4 and SQLite 3.
 
@@ -48,8 +50,8 @@ docker compose --profile apps run --rm -e MYSQL_HOST=mariadb dev sh bench/histor
 
 | Commit | What it is | Dead Heat |
 | --- | --- | --- |
-| `7cc3c14ed` | before the fix | broke in **20 of 20** tries: `RecordNotUnique` |
-| `8d601f12d` | the fix (`find_or_create_by!`) | broke in **4–5 of 20**: `RecordInvalid` |
+| `7cc3c14ed` | before the fix | broke in **17–20 of 20** tries: `RecordNotUnique` |
+| `8d601f12d` | the fix (`find_or_create_by!`) | broke in **2–5 of 20**: `RecordInvalid` |
 | `2ae2f6e1` | next commit, same logic | broke in 4 of 20 |
 | `b664dccb` | "fix prod exception on race to create Origin" (April 2025) | **no race in 100 tries** |
 | `49c71a6c` | follow-up | no race in 20 tries |
@@ -150,7 +152,7 @@ MariaDB, 60 tries each:
 
 | | Pauses off | Pauses on |
 | --- | --- | --- |
-| Tries that showed the race | **0 of 60** | **11 of 60** |
+| Tries that showed the race | **0 of 60** | **10–11 of 60** |
 
 Without pauses, two requests that start together here never line up the way production traffic
 sometimes does. Starting one a few milliseconds later (the stagger strategy) is what exposes it.

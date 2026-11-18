@@ -58,8 +58,8 @@ ten-line race test ([`bench/historical/lobsters`](bench/historical/lobsters)):
 
 | Lobsters code | Dead Heat |
 | --- | --- |
-| Before the fix (`7cc3c14ed`) | broke in **20 of 20** tries |
-| The December 2024 fix (`8d601f12d`) | still broke in **4–5 of 20**: the model's uniqueness validation raises `RecordInvalid`, which `find_or_create_by!` doesn't catch |
+| Before the fix (`7cc3c14ed`) | broke in **17–20 of 20** tries |
+| The December 2024 fix (`8d601f12d`) | still broke in **2–5 of 20**: the model's uniqueness validation raises `RecordInvalid`, which `find_or_create_by!` doesn't catch |
 | The fix that followed a production exception in April 2025 (`b664dccb`) | no race in **100** tries |
 
 So it would have caught the gap in the first fix four months before it reached production.
