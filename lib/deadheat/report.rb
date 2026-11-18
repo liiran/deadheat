@@ -180,13 +180,9 @@ module Deadheat
         * { box-sizing: border-box; }
         body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
         main { max-width: 1080px; margin: 0 auto; padding: 32px 20px 64px; }
-        header { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
-        .logo { width: 28px; height: 28px; position: relative; flex: none; }
-        .logo i { position: absolute; left: 0; right: 0; height: 3px; border-radius: 2px; background: var(--ink); }
-        .logo i:nth-child(1) { top: 7px; } .logo i:nth-child(2) { top: 18px; }
-        .logo b { position: absolute; top: 0; bottom: 0; left: 18px; width: 3px; border-radius: 2px; background: var(--race); }
-        h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
-        .meta { color: var(--muted); margin: 0 0 24px 40px; }
+        header { display: flex; align-items: center; margin-bottom: 8px; }
+        h1 { font-family: var(--mono); font-size: 21px; font-weight: 700; letter-spacing: -0.02em; margin: 0; background: var(--soft); padding: 3px 10px 4px; border-radius: 8px; }
+        .meta { color: var(--muted); margin: 0 0 24px; }
         .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 28px; }
         .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
         .stat strong { display: block; font-size: 26px; line-height: 1.2; font-variant-numeric: tabular-nums; }
@@ -239,13 +235,12 @@ module Deadheat
           details.card > summary { grid-template-columns: auto 1fr; }
           .count { grid-column: 2; }
           .headline, .sub { grid-column: 1 / 3; }
-          .meta { margin-left: 0; }
         }
       </style>
       </head>
       <body>
       <main>
-        <header><div class="logo" aria-hidden="true"><i></i><i></i><b></b></div><h1>Dead Heat</h1></header>
+        <header><h1>deadheat</h1></header>
         <p class="meta">
           <%= run.sweep ? "Sweep of #{entries.size} endpoint#{'s' unless entries.size == 1}" : "#{entries.size} race test#{'s' unless entries.size == 1}" %>
           · <%= h database(run) %> · <%= h when_text(run) %><%= run.sweep ? h(" · #{duration(run.sweep['seconds'])}") : "" %>
