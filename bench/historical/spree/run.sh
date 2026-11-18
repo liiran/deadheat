@@ -18,5 +18,7 @@ mkdir -p spec/races
 cp /deadheat/bench/historical/spree/gift_card_race_spec.rb spec/races/
 bundle install --quiet
 bundle exec rake test_app >/tmp/spree_test_app.log 2>&1 || { tail -20 /tmp/spree_test_app.log; exit 1; }
+rm -rf spec/dummy/tmp/deadheat/runs
 echo "== spree at $(git log -1 --format='%h %s' | cut -c1-80)"
-bundle exec rspec spec/races/gift_card_race_spec.rb 2>&1 | grep -v "^\s*#" | grep -E "Race:|No race|^ *[✗!~✓] |examples?,|Reproduce" || true
+bundle exec rspec spec/races/gift_card_race_spec.rb 2>&1 | grep -v "^\s*#" | grep -E "Race:|^ *[✗!~✓] |examples?,|Reproduce" || true
+ruby /deadheat/bench/historical/summary.rb spec/dummy/tmp/deadheat

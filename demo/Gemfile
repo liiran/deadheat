@@ -15,6 +15,7 @@ end
 
 # The tools Rails developers already use for data integrity, for bench/tools_bench.rb.
 group :development do
-  gem "database_consistency", require: false
-  gem "active_record_doctor"
+  # Exact versions, so the comparison in bench/results.md can be repeated.
+  gem "database_consistency", "3.1.2", require: false
+  gem "active_record_doctor", "2.1.0"
 end

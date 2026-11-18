@@ -1,4 +1,5 @@
-# How often each planted bug shows up per try, with Dead Heat's pauses off and on.
+# How often each planted bug shows up per try, with Dead Heat's pauses off and on. The bugs are the
+# ones in the gem's own test app (test/dummy), not Corner Store.
 #
 #   docker compose run --rm -e DB=postgres dev bundle exec ruby bench/pauses_bench.rb
 #

@@ -4,14 +4,21 @@
 module StoreFeatures
   extend ActiveSupport::Concern
 
+  # Five features have a limit: stock, a card's balance, seats, store credit, an invite's uses.
+  # These tests sit right at it (the last shirt, the last seat), which is what lets a request sent
+  # twice cross it. ROOM=1 runs them with room to spare instead. bench/tools_bench.rb measures the
+  # sweep both ways, to show which races it finds only from a test at the limit.
+  def self.roomy? = ENV["ROOM"] == "1"
+
   included do
     setup { sign_in_as users(:one) }
 
     test "buying the last one" do
-      product = Product.create!(name: "Shirt", price_cents: 2500, stock: 1)
+      stock = StoreFeatures.roomy? ? 5 : 1
+      product = Product.create!(name: "Shirt", price_cents: 2500, stock: stock)
       post "#{prefix}/products/#{product.id}/buy"
       assert_redirected_to order_path(Order.last)
-      assert_equal 0, product.reload.stock
+      assert_equal stock - 1, product.reload.stock
     end
 
     test "redeeming a one-use coupon" do
@@ -23,9 +30,10 @@ module StoreFeatures
 
     test "paying with a gift card" do
       card = GiftCard.create!(code: "GIFT-1", balance_cents: 5000)
-      post "#{prefix}/gift_cards/GIFT-1/spend", params: { amount_cents: 4000 }
+      amount = StoreFeatures.roomy? ? 1000 : 4000
+      post "#{prefix}/gift_cards/GIFT-1/spend", params: { amount_cents: amount }
       assert_redirected_to cart_path
-      assert_equal 1000, card.reload.balance_cents
+      assert_equal 5000 - amount, card.reload.balance_cents
     end
 
     test "subscribing to the newsletter" do
@@ -56,7 +64,7 @@ module StoreFeatures
     end
 
     test "buying a ticket to a nearly full event" do
-      event = Event.create!(name: "Launch party", capacity: 1)
+      event = Event.create!(name: "Launch party", capacity: StoreFeatures.roomy? ? 100 : 1)
       post "#{prefix}/events/#{event.id}/tickets"
       assert_redirected_to root_path
       assert_equal 1, event.tickets.count
@@ -64,13 +72,14 @@ module StoreFeatures
 
     test "withdrawing store credit" do
       wallet = Wallet.create!(user: users(:one), balance_cents: 5000)
-      post "#{prefix}/wallet/withdraw", params: { amount_cents: 4000 }
+      amount = StoreFeatures.roomy? ? 1000 : 4000
+      post "#{prefix}/wallet/withdraw", params: { amount_cents: amount }
       assert_redirected_to root_path
-      assert_equal 1000, wallet.reload.balance_cents
+      assert_equal 5000 - amount, wallet.reload.balance_cents
     end
 
     test "accepting a single-use invite" do
-      Invite.create!(code: "JOIN-ME", max_uses: 1)
+      Invite.create!(code: "JOIN-ME", max_uses: StoreFeatures.roomy? ? 5 : 1)
       post "#{prefix}/invites/JOIN-ME/accept"
       assert_redirected_to root_path
       assert_equal 1, Membership.count
