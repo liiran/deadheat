@@ -15,3 +15,8 @@ Gemfile.lock
 /bench/out/
 /demo/test/races/
 /gemfiles/*.lock
+
+# Never commit keys or credentials
+*.key
+/demo/config/credentials*
+.env*
