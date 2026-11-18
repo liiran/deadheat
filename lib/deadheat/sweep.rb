@@ -245,6 +245,10 @@ module Deadheat
       # Used by the regression tests the sweep writes: race one request of one test again, in its own
       # process, and say whether it passed. Returns { passed:, message:, status: }.
       def recheck(test:, file:, index:, route: nil, framework: "minitest")
+        # A sweep runs the app's tests itself, these included. It's already checking every request,
+        # so a regression test has nothing to add there (and would start a sweep inside a sweep).
+        return { passed: true, status: "skipped", message: "Skipped while bin/deadheat sweep runs the tests." } if active?
+
         require "deadheat/sweep/runner"
         root = defined?(Rails) && Rails.root ? Rails.root.to_s : Dir.pwd
         run_id = "recheck-#{Time.now.utc.strftime('%Y%m%d-%H%M%S')}-#{SecureRandom.hex(2)}"

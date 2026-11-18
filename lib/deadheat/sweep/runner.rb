@@ -27,6 +27,7 @@ module Deadheat
         @write_tests = write_tests
         @run_id = run_id || "#{Time.now.utc.strftime('%Y%m%d-%H%M%S')}-#{SecureRandom.hex(2)}"
         @dir = File.join(root, "tmp/deadheat/runs", @run_id)
+        @refusals = []
       end
 
       def run
@@ -50,14 +51,17 @@ module Deadheat
         errors = []
         rounds(targets).each { |round| race_round(round, errors) }
         results = collect(targets)
+        # Only requests that really were raced count as checked.
+        checked = results.reject { |r| r[:status] == "unchecked" }.map { |r| r[:target] }
         summary = Summary.new(results: results, targets: targets, requests: requests, routes: routes,
-                              coverage: coverage(routes, targets), dir: @dir, seconds: elapsed(started), errors: errors)
+                              coverage: coverage(routes, checked), dir: @dir, seconds: elapsed(started), errors: errors)
         finish(summary)
         summary
       end
 
       def exit_code(summary)
         return 2 if summary.requests.empty? && summary.targets.empty?
+        return 2 if summary.results.any? && summary.results.all? { |r| r[:status] == "unchecked" }
 
         summary.races.any? ? 1 : 0
       end
@@ -137,7 +141,11 @@ module Deadheat
               say line_for(target, result)
             else
               errors << { target: target, log: log }
-              say format("  ? %-34s couldn't be checked: the test stopped before this request (see %s)", endpoint_label(target), relative(log))
+              why = refusal(log)
+              unless why && @refusals.include?(why)
+                say format("  ? %-34s couldn't be checked: %s (see %s)", endpoint_label(target), why || "the test stopped before this request", relative(log))
+              end
+              @refusals << why if why
             end
           end
         end
@@ -182,6 +190,13 @@ module Deadheat
 
       def stop_process(pid)
         Process.kill("KILL", pid)
+      rescue SystemCallError
+        nil
+      end
+
+      # Why Dead Heat refused to race in that test run, if it did.
+      def refusal(log)
+        File.read(log)[/Deadheat::Refused:?\s*([^\n]+)/, 1]&.strip
       rescue SystemCallError
         nil
       end
@@ -246,7 +261,15 @@ module Deadheat
           say format("Checked %d of the app's %d write endpoints (%.0f%%) using its existing tests, with no setup.", cov[:checked], cov[:write_endpoints], cov[:share] * 100)
         end
         irreversible = races.count { |r| r[:irreversible] }
-        verdict = races.empty? ? "No races found" : "#{count(races.size, 'race')} found#{" (#{irreversible} with side effects that can't be undone)" if irreversible.positive?}"
+        unchecked = summary.results.count { |r| r[:status] == "unchecked" }
+        say "  ? #{count(unchecked, 'endpoint')} couldn't be checked" if unchecked.positive?
+        verdict = if races.any?
+                    "#{count(races.size, 'race')} found#{" (#{irreversible} with side effects that can't be undone)" if irreversible.positive?}"
+                  elsif unchecked == summary.results.size
+                    "Nothing could be checked"
+                  else
+                    "No races found"
+                  end
         say "#{verdict} in #{format_duration(summary.seconds)}."
         written = @write_tests ? write_regression_tests(races) : []
         say "Regression tests written: #{written.map { |path| relative(path) }.join(', ')}" if written.any?

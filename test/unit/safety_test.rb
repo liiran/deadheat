@@ -9,11 +9,12 @@ require "tmpdir"
 # writes into files, and what it shows.
 class DatabaseNameTest < Minitest::Test
   def test_only_a_name_with_test_as_a_word_passes
-    %w[app_test app_test-2 storage/test.sqlite3 TEST_DB testing_db /srv/app/db/shop_test.sqlite3].each do |name|
+    %w[app_test app_test-2 storage/test.sqlite3 TEST_DB testing_db /srv/app/db/shop_test.sqlite3 db/test/primary.sqlite3].each do |name|
       assert Deadheat::Preflight.test_name?(name), name
     end
     assert Deadheat::Preflight.test_name?("MyAppTest")
-    %w[contest_production latest attestations app_production app_development /srv/test/production.sqlite3 test_scores_production test_live].each do |name|
+    %w[contest_production latest attestations app_production app_development /srv/test/production.sqlite3 test_scores_production test_live
+       /srv/test/app/storage/main.sqlite3 db/production/test_copy.sqlite3 storage/development.sqlite3].each do |name|
       refute Deadheat::Preflight.test_name?(name), name
     end
   end
@@ -169,6 +170,18 @@ class RegressionTestWriterTest < Minitest::Test
     end
   end
 
+  def test_a_sweep_that_could_check_nothing_does_not_pass
+    out = StringIO.new
+    runner = Deadheat::Sweep::Runner.new(root: Dir.mktmpdir, framework: "minitest", out: out, write_tests: false)
+    summary = Deadheat::Sweep::Runner::Summary.new(results: [{ status: "unchecked", target: {} }], targets: [{}], requests: [{}], routes: [],
+                                                   coverage: { share: nil }, dir: Dir.mktmpdir, seconds: 1.0, errors: [])
+    assert_equal 2, runner.exit_code(summary)
+    FileUtils.mkdir_p(runner.instance_variable_get(:@dir))
+    runner.send(:finish, summary)
+    assert_includes out.string, "Nothing could be checked"
+    refute_includes out.string, "No races found"
+  end
+
   def test_the_request_number_must_be_a_number
     runner = Deadheat::Sweep::Runner.new(root: Dir.pwd, framework: "minitest", out: StringIO.new)
     target = { "method" => "POST", "route" => "/x", "test" => "T#test_x", "file" => "test/x_test.rb", "index" => "2; exit" }
@@ -221,7 +234,7 @@ class RedactTest < Minitest::Test
   end
 
   def test_changed_rows_saved_in_the_results_file_hide_those_columns
-    schema = Deadheat::Schema.new(ActiveRecord::Base.lease_connection)
+    schema = Deadheat::Schema.new(Deadheat::Preflight.database!)
     before = Deadheat::Snapshot.take(schema)
     Member.create!(team: Team.create!(name: "Redact", budget: 1), email: "new@example.com", password: "password123")
     saved = Deadheat::Canon.build(schema, before, Deadheat::Snapshot.take(schema)).to_h.to_json
@@ -299,7 +312,7 @@ class RestoreSafetyTest < DeadheatIntegrationTest
 
   test "a snapshot is never restored outside the test environment" do
     Post.create!(title: "Stays")
-    snapshot = Deadheat::Snapshot.take(Deadheat::Schema.new(ActiveRecord::Base.lease_connection), ["posts"])
+    snapshot = Deadheat::Snapshot.take(Deadheat::Schema.new(Deadheat::Preflight.database!), ["posts"])
     swap(Rails, :env, ActiveSupport::EnvironmentInquirer.new("development")) do
       assert_raises(Deadheat::Refused) { snapshot.restore }
     end

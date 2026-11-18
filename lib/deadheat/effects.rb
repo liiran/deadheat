@@ -4,7 +4,13 @@ module Deadheat
   class Effects
     # Jobs whose names suggest money, shipping or messages to people. A duplicate of one of these, or
     # any duplicate email or outside POST/PUT/PATCH/DELETE, is labelled "irreversible".
-    IRREVERSIBLE_JOB = /mail|charge|pay|refund|capture|ship|fulfil|deliver|notif|webhook|sms|push|invoice|transfer|payout/i
+    IRREVERSIBLE_WORDS = %w[mail email charg pay refund captur ship fulfil deliver notif webhook sms push invoic transfer].freeze
+
+    # Goes by the words in the job's name: ShipOrderJob and OrderMailer count, MembershipJob doesn't.
+    def self.irreversible_job?(name)
+      words = name.to_s.scan(/[A-Z]?[a-z]+|[A-Z]+(?![a-z])/).map(&:downcase)
+      words.any? { |word| IRREVERSIBLE_WORDS.any? { |stem| word.start_with?(stem) } }
+    end
 
     attr_reader :mails, :jobs, :http
 
@@ -60,7 +66,7 @@ module Deadheat
       end
       extra(jobs, expected.jobs).each do |(job, _args), n|
         lines << "#{job} queued #{n} more time#{'s' if n > 1}"
-        irreversible ||= job.match?(IRREVERSIBLE_JOB)
+        irreversible ||= Effects.irreversible_job?(job)
       end
       extra(http, expected.http).each do |call, n|
         lines << "#{call} called #{n} more time#{'s' if n > 1}"

@@ -24,8 +24,10 @@ Gem::Specification.new do |spec|
   spec.executables = ["deadheat"]
   spec.require_paths = ["lib"]
 
+  spec.add_dependency "activesupport", ">= 7.1", "< 9"
   spec.add_dependency "activerecord", ">= 7.1", "< 9"
   spec.add_dependency "actionpack", ">= 7.1", "< 9"
   spec.add_dependency "railties", ">= 7.1", "< 9"
+  spec.add_dependency "concurrent-ruby", "~> 1.2"
   spec.add_dependency "prism", "~> 1.2"
 end

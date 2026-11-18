@@ -47,12 +47,18 @@ module Deadheat
     # "test" as a word of its own: app_test, app_test-2, storage/test.sqlite3, testing_db, MyAppTest.
     # Not a word that happens to contain it (contest, latest, attestations), and never a name that
     # also says production, staging or live (test_scores_production).
-    # For a SQLite file only the file's own name counts, not the folders above it.
+    # For a SQLite file, the file's own name counts, or the folder it is in when that folder is called
+    # "test" (db/test/primary.sqlite3, as Rails lays out an app with several databases). Folders
+    # further up don't count.
     def test_name?(name)
-      base = File.basename(name.to_s)
-      return false if base.match?(/(?<![a-z])(?:production|prod|staging|live)(?![a-z])/i)
+      path = name.to_s
+      base = File.basename(path)
+      folder = File.basename(File.dirname(path))
+      other = /(?<![a-z])(?:production|prod|staging|live)(?![a-z])/i
+      return false if base.match?(other) || folder.match?(other)
 
-      base.match?(/(?<![a-z])test(?:s|ing)?(?![a-z])/i) || base.match?(/(?<=[a-z])Test(?![a-z])/)
+      base.match?(/(?<![a-z])test(?:s|ing)?(?![a-z])/i) || base.match?(/(?<=[a-z])Test(?![a-z])/) ||
+        folder.match?(/\A(?:test|tests|testing)\z/i)
     end
 
     # Rails writes the environment a database was set up for into ar_internal_metadata. One set up

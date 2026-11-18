@@ -61,6 +61,15 @@ class EffectsTest < Minitest::Test
     _, irreversible = Effects.new(jobs: [["IndexSearchJob", "[]"]] * 2).extra_over(Effects.new(jobs: [["IndexSearchJob", "[]"]]))
     refute irreversible, "re-indexing twice can be undone"
   end
+
+  def test_irreversible_jobs_go_by_the_words_in_their_name
+    %w[ShipOrderJob OrderMailer#confirmation ChargeCardJob PaymentJob SendSMSJob RefundJob DeliverWebhookJob EmailDigestJob].each do |name|
+      assert Effects.irreversible_job?(name), name
+    end
+    %w[MembershipJob IndexSearchJob RepairCountersJob ScholarshipSyncJob].each do |name|
+      refute Effects.irreversible_job?(name), name
+    end
+  end
 end
 
 class PausePlanTest < Minitest::Test

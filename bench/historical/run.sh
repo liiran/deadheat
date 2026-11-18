@@ -32,6 +32,8 @@ RAILS_ENV=test bin/rails db:schema:load >/dev/null 2>&1 || {
   RAILS_ENV=test bin/rails db:drop db:create >/dev/null 2>&1
   RAILS_ENV=test bin/rails db:schema:load:primary >/dev/null
 }
+# A commit whose schema file lags behind its newest migration: bring the test database up to date.
+RAILS_ENV=test bin/rails db:migrate >/dev/null 2>&1 || true
 echo "== $app at $(git log -1 --format='%h %s' | cut -c1-80)"
 rm -rf tmp/deadheat/runs
 if [ "$spec" = "sweep" ]; then
