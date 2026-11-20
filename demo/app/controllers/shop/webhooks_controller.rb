@@ -1,9 +1,13 @@
 # frozen_string_literal: true
 
 module Shop
+  # RACY ON PURPOSE: don't copy this file. The safe version is app/controllers/fixed/webhooks_controller.rb.
+  #
   # 6. The payment provider says an order was paid. Webhooks can arrive more than once, sometimes at
   # the same moment. Checks the order isn't paid yet, then ships it.
   class WebhooksController < ApplicationController
+    # A real webhook must check the provider's signature before believing the request. The demo
+    # leaves that out, so anyone could mark an order paid: add it before using this anywhere.
     allow_unauthenticated_access
     skip_forgery_protection
 

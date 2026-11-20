@@ -3,6 +3,8 @@
 module Fixed
   # 6. Fixed: marking the order paid is the check, and a unique index allows one shipment per order.
   class WebhooksController < ApplicationController
+    # A real webhook must check the provider's signature before believing the request. The demo
+    # leaves that out, so anyone could mark an order paid: add it before using this anywhere.
     allow_unauthenticated_access
     skip_forgery_protection
 

@@ -14,7 +14,7 @@ class PagesController < ApplicationController
   end
 
   def order
-    order = Order.find(params[:id])
+    order = Order.where(user: Current.user).find(params[:id]) # only your own orders
     render plain: "Order #{order.id}: #{order.product.name}"
   end
 

@@ -11,6 +11,17 @@ today's Lobsters), Rails 8.1, PostgreSQL 17, MySQL 8.4, MariaDB 11.4 and SQLite 
 were all written by the same person. Sections 2 and 3 use other people's code and other people's bugs;
 section 1 doesn't, and should be read as a demonstration.
 
+**Rerunning sections 2 and 3.** They need each app's code in `bench/apps/` (which git ignores):
+
+```
+git clone https://github.com/lobsters/lobsters bench/apps/lobsters
+git clone https://github.com/spree/spree bench/apps/spree
+git clone https://github.com/mastodon/mastodon bench/apps/mastodon
+```
+
+The commands below then install and run those projects' code, at old commits, inside the `dev`
+container, which can write to this folder. Run them where you would be happy to run those projects.
+
 How to read a race test's result (`bench/historical/summary.rb` prints it):
 
 - **ok:** the try gave exactly the result of running the two requests one after the other
@@ -205,8 +216,11 @@ docker compose --profile ruby4 run --rm dev4 sh bench/historical/run.sh lobsters
 - **Flagged isn't the same as real.** Each flag was read against Lobsters' code by one person. In 2024,
   7 of the 9 were real races and 2 were differences the app makes on purpose (mod notes are
   de-duplicated, so two at once write fewer). Lobsters hasn't been asked to confirm any of them.
-- **Two of the seven have since been fixed in Lobsters,** so they can be named: a lost update to the
-  unread-message counter, and a 500 when a tag is created twice.
+- **Two of the seven can be named.** A lost update to the unread-message counter has since been
+  fixed in Lobsters. A 500 when a moderator creates the same tag twice at once did not show up in
+  today's run, but that run was on SQLite, where this kind of race can't happen (one write
+  transaction at a time); the code looks unchanged, so on MariaDB it is probably still there. It
+  only shows an error page to a moderator who double-submits, and the data stays correct.
 - **The other five are still in today's code,** so they aren't described here or anywhere in this
   repository. Today's nine are those same races, reached through more endpoints.
 - **This run also surfaced mistakes in Dead Heat itself,** all fixed:

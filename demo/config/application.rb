@@ -18,6 +18,9 @@ require "rails/test_unit/railtie"
 # you've limited to :test, :development, or :production.
 Bundler.require(*Rails.groups)
 
+# Corner Store has race conditions in it on purpose. It is here to be tested, never to be deployed.
+abort "Corner Store is a demo with deliberate bugs and doesn't run in production." if ENV["RAILS_ENV"] == "production" || ENV["RACK_ENV"] == "production"
+
 module Demo
   class Application < Rails::Application
     # Initialize configuration defaults for originally generated Rails version.

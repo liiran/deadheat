@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 module Shop
+  # RACY ON PURPOSE: don't copy this file. The safe version is app/controllers/fixed/checkouts_controller.rb.
+  #
   # 1. Buying the last one. Reads the stock, decides, then saves it.
   class CheckoutsController < ApplicationController
     def create

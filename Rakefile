@@ -24,8 +24,19 @@ end
 
 task default: :test
 
+desc "Install the Corner Store demo app's own gems, if they aren't there yet"
+task "demo:bundle" do
+  require "bundler"
+  Bundler.with_unbundled_env do
+    Dir.chdir(File.expand_path("demo", __dir__)) do
+      system("bundle", "check", out: File::NULL, err: File::NULL) || system("bundle", "install") ||
+        abort("Couldn't install the demo app's gems (demo/Gemfile)")
+    end
+  end
+end
+
 desc "Sweep the Corner Store demo app end to end (slow; DB=postgres for one database)"
-task "test:sweep" do
+task "test:sweep" => "demo:bundle" do
   databases = ENV["DB"] ? [ENV["DB"]] : DATABASES
   failed = databases.reject do |db|
     puts "\n== sweep on #{db}"

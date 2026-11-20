@@ -3,7 +3,11 @@
 A small Rails 8 store that exists to show [Dead Heat](../README.md) at work and to measure it.
 
 **It has ten race conditions in it on purpose. Don't deploy it or copy code from `app/controllers/shop/`.**
-It has no production database configured, so it can't be started in production by accident.
+It refuses to start in production.
+
+The rest of the app is kept as small as possible and isn't a model to copy either: the admin endpoints
+don't check who is an admin, and the webhook doesn't check a signature. The versions in
+`app/controllers/fixed/` show how each race is fixed, and nothing more.
 
 ## What's in it
 
@@ -33,6 +37,8 @@ All of them pass: with one request at a time, every feature works.
 From the repository's root folder (everything runs in Docker):
 
 ```bash
+docker compose run --rm dev bundle install                         # Dead Heat's own gems, once
+docker compose run --rm -w /deadheat/demo dev bundle install       # the demo app's gems, once
 docker compose run --rm -w /deadheat/demo dev bin/rails db:prepare
 docker compose run --rm -w /deadheat/demo dev bin/rails test       # the ordinary tests: all pass
 docker compose run --rm -w /deadheat/demo dev bin/deadheat scan    # reads the code

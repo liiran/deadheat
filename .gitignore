@@ -14,9 +14,22 @@ Gemfile.lock
 /bench/apps/
 /bench/out/
 /demo/test/races/
+/demo/spec/races/
+/demo/.bundle/
+/test/dummy/storage/
 /gemfiles/*.lock
 
 # Never commit keys or credentials
 *.key
+*.pem
+id_rsa*
+id_ed25519*
 /demo/config/credentials*
 .env*
+
+# Editors and operating systems
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db

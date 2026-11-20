@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 module Shop
+  # RACY ON PURPOSE: don't copy this file. The safe version is app/controllers/fixed/subscribers_controller.rb.
+  #
   # 4. Newsletter signup. The model validates the email is unique; the table has no unique index.
   class SubscribersController < ApplicationController
     allow_unauthenticated_access

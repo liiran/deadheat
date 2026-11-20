@@ -6,6 +6,8 @@ module Fixed
     def spend
       card = GiftCard.find_by!(code: params[:code])
       amount = params[:amount_cents].to_i
+      return render(plain: "Enter an amount above zero", status: :unprocessable_entity) unless amount.positive?
+
       paid = card.with_lock do
         next false if card.balance_cents < amount
 

@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 module Shop
+  # RACY ON PURPOSE: don't copy this file. The safe version is app/controllers/fixed/coupons_controller.rb.
+  #
   # 2. A one-use coupon. Checks it hasn't been used, then marks it used.
   class CouponsController < ApplicationController
     def redeem

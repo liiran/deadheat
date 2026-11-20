@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 module Shop
+  # RACY ON PURPOSE: don't copy this file. The safe version is app/controllers/fixed/invites_controller.rb.
+  #
   # 10. An invite code that works a limited number of times. Checks the uses, then joins.
   class InvitesController < ApplicationController
     def accept
