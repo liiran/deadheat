@@ -496,6 +496,11 @@ Running it:
   possible there, and Dead Heat reports what really happens.
 - **If a run is killed hard** (`kill -9`, power loss) while a race is going, its rows can stay in the
   test database. `bin/rails db:test:prepare` resets it. Ctrl-C is fine.
+- **"Broke in 18 of 20 tries" isn't how often it happens in production.** Dead Heat picks the timings
+  most likely to collide, so the count says how reliably the test shows the bug, not how often real
+  traffic would hit it. That depends on how far apart real requests arrive and how long the gap between
+  the read and the write is ([`bench/results.md`](bench/results.md#5-the-same-race-without-dead-heat)
+  has an example).
 - **Some findings need a person to judge.** Dead Heat shows exactly what differed. A "different result"
   can be on purpose: an app that de-duplicates log entries writes fewer of them when two requests arrive
   together. And the scan only lists suspects: it looks inside one method at a time and knows a fixed set
