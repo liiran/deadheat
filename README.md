@@ -1,8 +1,10 @@
 # Dead Heat
 
-**Finds the bugs in a Rails app that only happen when two requests arrive at once.**
+**Finds race conditions in Rails apps.**
 
-A store has one shirt left. Two people press Buy at the same moment:
+A race condition is a bug that only shows up when two requests change the same data at the same time.
+Each request is correct on its own; together they break it. A store has one shirt left, and two people
+press Buy at the same moment:
 
 ```
 Alice's request: "how many shirts?" → 1     ✓ enough
@@ -12,16 +14,29 @@ Bob's request:   create order, set stock to 0
 Result: 2 orders for 1 shirt.
 ```
 
-Every normal test passes, because tests send one request at a time. Dead Heat sends them together.
-It takes the requests your tests already make, sends each one **twice at the same moment**, and checks
-whether the result could ever happen **one after the other**. When it couldn't, it tells you what broke,
-shows both requests' database queries side by side, points at the line of code, suggests the fix, and
-writes a test so the bug can't come back.
+Nothing crashes, and every test passes, because tests send one request at a time. In production it
+happens when someone double-clicks, a phone retries on a bad connection, a payment provider sends the
+same webhook twice, or someone sends two requests at once on purpose to use a coupon twice. Then it's a
+support ticket that nobody can reproduce.
 
-*In racing, a dead heat is when two runners cross the line at exactly the same moment.*
+**Dead Heat makes those collisions happen in your test suite, on purpose and over and over.** It takes
+the requests your tests already make and runs each one twice: first one after the other, then at the
+same moment. If running them together leaves the database in a state that one after the other never
+could, that's a race, and Dead Heat shows you:
+
+- what went wrong, in plain words: "2 orders for 1 shirt"
+- both requests' database queries side by side, in the order they ran
+- the line of code that caused it, and the standard fix
+- a test that fails until it's fixed, so the bug can't come back
+
+**What it covers:** races in data your app keeps in its database, such as stock, balances, counters,
+one-use codes, duplicate rows, and a webhook or job processed twice. It doesn't look for thread-safety
+bugs in plain Ruby objects or for slowness under load.
 
 **What it is:** a Ruby gem you add to a Rails app's test setup. It runs only in the test environment, on
 the test database, on your own computer or in CI.
+
+*In racing, a dead heat is when two runners cross the line at exactly the same moment.*
 
 **When it's useful:**
 
@@ -29,6 +44,14 @@ the test database, on your own computer or in CI.
 - Before a sale or a launch, to check checkout, credits and limits under double clicks and retries.
 - On a pull request that changes a controller, job or webhook handler that writes to the database.
 - For webhooks, which payment providers and platforms may deliver more than once.
+
+**Are the races it finds real?** Dead Heat doesn't change your app's code. It only decides when
+each request starts, and sometimes makes one wait a few milliseconds after it reads something, a delay a
+busy server adds on its own. It reports a race only when the result is one that running the requests
+one after the other can't produce. As a check, the demo store's checkout race was reproduced with no
+Dead Heat code at all: on a real Puma server, two plain `curl` "Buy" requests sold the last shirt twice
+in 20 of 30 tries when sent together, and 3 of 30 when sent 20 ms apart. The fixed version never did
+([details](bench/results.md#5-the-same-race-without-dead-heat)).
 
 **Does it work?** [Results](#results) has what was measured, with its limits: known race bugs in
 Lobsters, Spree and Mastodon reproduced before their fixes, a sweep of all of Lobsters, and a comparison

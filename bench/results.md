@@ -268,3 +268,34 @@ Without pauses, two requests that start together here never line up the way prod
 sometimes does. Starting one a few milliseconds later (the stagger strategy, one try in six) is what
 exposes it. As section 2a says, that strategy was built on this bug, so this table shows that the pause
 works on the case it was made for, not that it generalizes.
+
+## 5. The same race without Dead Heat
+
+Dead Heat starts requests together and sometimes makes one wait a few milliseconds. So, does what it
+finds also happen with none of that? `bench/double_click.sh` runs the demo on a real Puma server (2
+worker processes, 3 threads each), signs one shopper in, and uses plain `curl` to press "Buy" twice on
+a product with 1 in stock, with a gap between the two presses. No Dead Heat code is involved. 30
+products per row:
+
+```
+docker compose run --rm dev sh bench/double_click.sh                # PostgreSQL
+docker compose run --rm -e DB=sqlite dev sh bench/double_click.sh
+```
+
+| Gap between the two presses | Racy checkout, PostgreSQL | Racy checkout, SQLite | Fixed twin, both |
+| --- | --- | --- | --- |
+| 0 ms (sent together) | sold twice 20 of 30 | 18 of 30 | 0 of 30 |
+| 5 ms | 22 of 30 | 19 of 30 | 0 of 30 |
+| 20 ms | 3 of 30 | 2 of 30 | 0 of 30 |
+| 100 ms | 0 of 30 | 0 of 30 | 0 of 30 |
+
+- **The race is real:** a real server, sent two real requests, sells the last shirt twice. The fixed
+  version never does.
+- **The gap is what matters.** This checkout takes a few milliseconds between reading the stock and
+  saving it, so only presses closer together than that collide. A person's double click (often 100 ms
+  or more apart) rarely would here. Two requests sent at once (a retry, a script, someone trying it on
+  purpose) often do. A real checkout that calls a payment provider between the check and the save holds
+  the gap open for hundreds of milliseconds, and then ordinary double clicks hit it too.
+- **This is why Dead Heat makes the timing happen** instead of waiting for it. The pauses don't change
+  what the code does; they choose a timing, of the kind shown in the first two rows, that a server can
+  hit on its own.
