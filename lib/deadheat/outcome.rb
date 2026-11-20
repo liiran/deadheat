@@ -44,7 +44,7 @@ module Deadheat
         status = location = nil
         if response.respond_to?(:status) && response.respond_to?(:headers)
           status = response.status
-          location = response.headers["Location"]&.then { |url| Effects.mask(url.sub(%r{\Ahttps?://[^/]+}, ""), new_ids) }
+          location = response.headers["Location"]&.then { |url| Redact.url(Effects.mask(url.sub(%r{\Ahttps?://[^/]+}, ""), new_ids)) }
         end
         exception = actor.error && !actor.error.is_a?(Deadheat::Stop) ? actor.error : nil
         exception ||= response.request.env["action_dispatch.exception"] if response.respond_to?(:request) && response.request

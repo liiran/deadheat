@@ -22,13 +22,22 @@ module Deadheat
       refuse!("Dead Heat only runs in the test environment (RAILS_ENV is #{Rails.env}). It writes to and restores database tables.") unless Rails.env.test?
 
       connection = ActiveRecord::Base.respond_to?(:lease_connection) ? ActiveRecord::Base.lease_connection : ActiveRecord::Base.connection
-      config = ActiveRecord::Base.connection_db_config
-      return connection if @checked.equal?(config)
+      configs = [ActiveRecord::Base.connection_db_config, *other_databases]
+      return connection if @checked == configs
 
-      check_database_name!(config)
+      configs.each { |config| check_database_name!(config) }
       check_environment_record!
-      @checked = config
+      @checked = configs
       connection
+    end
+
+    # An app with several databases (`connects_to`): racing requests commit to those too, so each
+    # one this app writes to must be a test database as well.
+    def other_databases
+      main = ActiveRecord::Base.connection_db_config
+      ActiveRecord::Base.connection_handler.connection_pool_list(:writing).map(&:db_config).reject { |config| config.equal?(main) }
+    rescue StandardError
+      []
     end
 
     def refuse!(message)
@@ -40,27 +49,32 @@ module Deadheat
       if name == ":memory:" || name.include?("mode=memory")
         refuse!("The test database is an in-memory SQLite database, which each connection sees separately, so racing requests wouldn't share data. Use a file, like storage/test.sqlite3.")
       end
-      allowed = ENV["DEADHEAT_ALLOW_DATABASE"]
-      return if test_name?(name) || (allowed && allowed == name)
+      return if test_name?(name) || ENV["DEADHEAT_ALLOW_DATABASE"].to_s.split(",").include?(name)
 
-      refuse!("The database “#{name}” doesn't look like a test database. Dead Heat writes to and restores tables, so it only runs on a database whose name has “test” in it as a word (app_test, test.sqlite3) and no “production”, “staging” or “live”. If this one really is a throwaway test database, set DEADHEAT_ALLOW_DATABASE=#{name}.")
+      refuse!("The database “#{name}” doesn't look like a test database. Dead Heat writes to and restores tables, so it only runs on databases whose name has “test” in it as a word (app_test, test.sqlite3) and no “production”, “staging”, “live” or “development”. If this one really is a throwaway test database, set DEADHEAT_ALLOW_DATABASE=#{name} (several names: separate them with commas).")
     end
+
+    TEST_WORDS = %w[test tests testing].freeze
+    OTHER_ENVIRONMENTS = %w[production prod prd preprod staging stage live development dev].freeze
 
     # "test" as a word of its own: app_test, app_test-2, storage/test.sqlite3, testing_db, MyAppTest.
     # Not a word that happens to contain it (contest, latest, attestations), and never a name that
-    # also says production, staging or live (test_scores_production).
+    # also names another environment (test_scores_production, AppTestProd, app_test_development).
     # For a SQLite file, the file's own name counts, or the folder it is in when that folder is called
     # "test" (db/test/primary.sqlite3, as Rails lays out an app with several databases). Folders
     # further up don't count.
     def test_name?(name)
       path = name.to_s
-      base = File.basename(path)
-      folder = File.basename(File.dirname(path))
-      other = /(?<![a-z])(?:production|prod|staging|live)(?![a-z])/i
-      return false if base.match?(other) || folder.match?(other)
+      base = words(File.basename(path))
+      folder = words(File.basename(File.dirname(path)))
+      return false if (base + folder).intersect?(OTHER_ENVIRONMENTS)
 
-      base.match?(/(?<![a-z])test(?:s|ing)?(?![a-z])/i) || base.match?(/(?<=[a-z])Test(?![a-z])/) ||
-        folder.match?(/\A(?:test|tests|testing)\z/i)
+      base.intersect?(TEST_WORDS) || (folder.size == 1 && folder.intersect?(TEST_WORDS))
+    end
+
+    # The words in a name: app_test-2 is app, test; MyAppTest is my, app, test.
+    def words(name)
+      name.gsub(/([a-z])([A-Z])/, '\1 \2').downcase.scan(/[a-z]+/)
     end
 
     # Rails writes the environment a database was set up for into ar_internal_metadata. One set up

@@ -140,6 +140,24 @@ class CLITest < Minitest::Test
     assert_includes text, "Unknown command"
   end
 
+  def test_bad_options_get_a_plain_message_not_a_stack_trace
+    ["sweep --tries abc", "sweep --tries 0", "sweep --tries -3", "sweep --bogus"].each do |line|
+      status, text = run_cli(*line.split)
+      assert_equal 64, status, line
+      assert_includes text, "bin/deadheat --help", line
+    end
+  end
+
+  def test_a_scan_that_read_no_file_does_not_say_all_clear
+    Dir.mktmpdir do |dir|
+      status, text = Dir.chdir(dir) { run_cli("scan", "no_such_folder") }
+      assert_equal 2, status
+      assert_includes text, "no Ruby files"
+      refute_includes text, "Nothing looks racy"
+      refute File.exist?(File.join(dir, "tmp/deadheat/scan.json"))
+    end
+  end
+
   def test_scan_reads_a_file_and_lists_suspects
     Dir.mktmpdir do |dir|
       File.write(File.join(dir, "likes.rb"), "def like\n  post = Post.find(1)\n  post.update!(likes: post.likes + 1)\nend\n")

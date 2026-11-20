@@ -20,6 +20,37 @@ class DatabaseNameTest < Minitest::Test
       refute Deadheat::Preflight.test_name?(name), name
     end
   end
+
+  def test_a_name_that_also_names_another_environment_never_passes
+    %w[AppTestProduction MyAppTestProd AppTestLive ab_test_development test_app_development app_test_dev app_test_preprod app_test_prd
+       productiondb_test_production test/development.sqlite3 app_test_staging TestStage].each do |name|
+      refute Deadheat::Preflight.test_name?(name), name
+    end
+    %w[devise_test developer_portal_test livestock_test backstage_test product_test].each do |name|
+      assert Deadheat::Preflight.test_name?(name), "#{name} only contains such a word inside another"
+    end
+  end
+
+  def test_every_database_the_app_writes_to_is_checked
+    other = Struct.new(:database).new("legacy_reporting")
+    error = assert_raises(Deadheat::Refused) { Deadheat::Preflight.check_database_name!(other) }
+    assert_includes error.message, "legacy_reporting"
+    ENV["DEADHEAT_ALLOW_DATABASE"] = "something_else,legacy_reporting"
+    Deadheat::Preflight.check_database_name!(other)
+    assert_respond_to Deadheat::Preflight.other_databases, :each
+  ensure
+    ENV.delete("DEADHEAT_ALLOW_DATABASE")
+  end
+
+  def test_a_race_test_checks_the_database_before_any_of_its_setup_runs
+    env = Rails.env
+    Rails.env = "development"
+    error = assert_raises(Deadheat::Refused) { Deadheat::RaceTest.new("x").before_setup }
+    assert_includes error.message, "test environment"
+    refute Deadheat::DatabaseCleanerPause.paused?, "nothing else ran"
+  ensure
+    Rails.env = env
+  end
 end
 
 class ReportAccessTest < Minitest::Test
@@ -118,6 +149,67 @@ class ReportAccessTest < Minitest::Test
       assert_equal 403, get("/", "HTTP_X_FORWARDED_FOR" => "127.0.0.1, 10.0.0.5").first, "a private-network visitor behind a local proxy"
       assert_equal 403, get("/", "HTTP_HOST" => "evil.example.com").first, "another site's name pointed at this computer"
       assert_equal 200, get("/", "HTTP_X_FORWARDED_FOR" => "127.0.0.1").first, "a local proxy passing on a local visitor"
+    end
+  end
+
+  def test_a_local_proxy_naming_a_remote_visitor_in_any_header_is_refused
+    swap(Rails, :root, Pathname.new(@root)) do
+      %w[HTTP_X_REAL_IP HTTP_CLIENT_IP HTTP_X_CLIENT_IP HTTP_TRUE_CLIENT_IP HTTP_CF_CONNECTING_IP].each do |header|
+        assert_equal 403, get("/", header => "203.0.113.9").first, header
+        assert_equal 200, get("/", header => "127.0.0.1").first, "#{header} naming this computer"
+      end
+      assert_equal 403, get("/", "HTTP_FORWARDED" => "for=127.0.0.1").first
+      assert_equal 403, get("/", "HTTP_VIA" => "1.1 proxy").first
+    end
+  end
+
+  def test_a_forged_forwarded_host_does_not_make_another_site_local
+    swap(Rails, :root, Pathname.new(@root)) do
+      assert_equal 403, get("/", "HTTP_HOST" => "evil.example.com", "HTTP_X_FORWARDED_HOST" => "localhost").first
+      assert_equal 403, get("/", "HTTP_X_FORWARDED_HOST" => "evil.example.com").first
+      assert_equal 403, get("/", "HTTP_X_FORWARDED_HOST" => "localhost, evil.example.com").first
+      assert_equal 200, get("/", "HTTP_HOST" => "127.0.0.1:3000").first
+      assert_equal 200, get("/", "HTTP_HOST" => "[::1]:3000", "REMOTE_ADDR" => "::1").first
+      assert_equal 200, get("/", "HTTP_HOST" => "shop.localhost:3000").first
+    end
+  end
+
+  def test_another_websites_script_cannot_read_the_page
+    swap(Rails, :root, Pathname.new(@root)) do
+      assert_equal 403, get("/", "HTTP_ORIGIN" => "https://evil.example.com").first
+      assert_equal 403, get("/", "HTTP_ORIGIN" => "null").first
+      assert_equal 403, get("/", "HTTP_SEC_FETCH_SITE" => "cross-site", "HTTP_SEC_FETCH_MODE" => "cors").first
+      assert_equal 403, get("/", "HTTP_SEC_FETCH_SITE" => "cross-site", "HTTP_SEC_FETCH_MODE" => "no-cors").first
+      assert_equal 200, get("/", "HTTP_SEC_FETCH_SITE" => "cross-site", "HTTP_SEC_FETCH_MODE" => "navigate").first, "following a link here"
+      assert_equal 200, get("/", "HTTP_SEC_FETCH_SITE" => "none", "HTTP_SEC_FETCH_MODE" => "navigate").first, "typing the address"
+      assert_equal 200, get("/", "HTTP_ORIGIN" => "http://localhost:3000", "HTTP_SEC_FETCH_SITE" => "same-origin").first
+    end
+  end
+
+  def test_allowing_remote_visitors_keeps_the_name_and_other_site_checks
+    ENV["DEADHEAT_DASHBOARD_ALLOW_REMOTE"] = "1"
+    swap(Rails, :root, Pathname.new(@root)) do
+      assert_equal 200, get("/", "REMOTE_ADDR" => "172.17.0.1").first, "a browser outside the container"
+      assert_equal 403, get("/", "REMOTE_ADDR" => "172.17.0.1", "HTTP_HOST" => "evil.example.com").first
+      assert_equal 403, get("/", "REMOTE_ADDR" => "172.17.0.1", "HTTP_ORIGIN" => "https://evil.example.com").first
+    end
+  ensure
+    ENV.delete("DEADHEAT_DASHBOARD_ALLOW_REMOTE")
+  end
+
+  def test_the_dashboards_controller_is_not_loaded_when_the_app_boots
+    script = 'require "rails"; require "action_controller"; require "deadheat"; ' \
+             'exit(ActionController.autoload?(:Base) && Deadheat.autoload?(:ReportsController) ? 0 : 1)'
+    assert system(Gem.ruby, "-I", File.expand_path("../../lib", __dir__), "-e", script), "requiring deadheat loaded Action Controller"
+  end
+
+  def test_the_page_may_load_nothing_and_cannot_be_framed
+    swap(Rails, :root, Pathname.new(@root)) do
+      _, text, headers = get("/")
+      policy = headers["content-security-policy"]
+      ["default-src 'none'", "base-uri 'none'", "form-action 'none'", "frame-ancestors 'none'"].each { |rule| assert_includes policy, rule }
+      assert_includes text, %(content="#{Deadheat::Report::CONTENT_POLICY}")
+      refute_match(/<script|<iframe|<form|<img|<link/i, text)
     end
   end
 
@@ -230,8 +322,9 @@ class RedactTest < Minitest::Test
   end
 
   def test_values_written_into_the_statement_are_hidden
+    apostrophe = Deadheat::Redact.backslash_escapes? ? %q(\') : "''" # how this database writes ' inside a value
     assert_equal "SELECT `users`.* FROM `users` WHERE `users`.`email` = [FILTERED] AND `users`.`id` = 5",
-      Deadheat::SQL.readable({ sql: %q(SELECT `users`.* FROM `users` WHERE `users`.`email` = 'o\'brien@example.com' AND `users`.`id` = 5) })
+      Deadheat::SQL.readable({ sql: "SELECT `users`.* FROM `users` WHERE `users`.`email` = 'o#{apostrophe}brien@example.com' AND `users`.`id` = 5" })
     assert_equal "INSERT INTO `sessions` (`user_id`, `token`) VALUES ([FILTERED])",
       Deadheat::SQL.readable({ sql: "INSERT INTO `sessions` (`user_id`, `token`) VALUES (5, 'tok_123')" })
     assert_equal "INSERT INTO `orders` (`user_id`, `product_id`) VALUES (5, 37)",
@@ -253,10 +346,63 @@ class RedactTest < Minitest::Test
   def test_a_hidden_column_named_anywhere_hides_every_quoted_value
     assert_equal "SELECT 1 FROM users WHERE lower(email) = lower([FILTERED])",
       Deadheat::SQL.readable({ sql: "SELECT 1 FROM users WHERE lower(email) = lower('Bob@Example.com')" })
-    assert_equal "SELECT 1 FROM sessions WHERE token IN ([FILTERED], [FILTERED]) AND kind = [FILTERED]",
+    assert_equal "SELECT 1 FROM sessions WHERE token IN ([FILTERED]) AND kind = [FILTERED]",
       Deadheat::SQL.readable({ sql: "SELECT 1 FROM sessions WHERE token IN ('a', 'b') AND kind = 'web'" })
     assert_equal "SELECT 1 FROM products WHERE name = 'email'", Deadheat::SQL.readable({ sql: "SELECT 1 FROM products WHERE name = 'email'" }),
       "a value that happens to be a column's name hides nothing"
+  end
+
+  def test_other_ways_of_quoting_a_value_are_hidden_too
+    {
+      %(UPDATE users SET token = "in double quotes" WHERE id = 5) => "UPDATE users SET token = [FILTERED] WHERE id = 5",
+      %(UPDATE users SET token = $$dollar quoted$$ WHERE id = 5) => "UPDATE users SET token = [FILTERED] WHERE id = 5",
+      %(UPDATE users SET token = $t$tagged 'quote'$t$ WHERE id = 5) => "UPDATE users SET token = [FILTERED] WHERE id = 5",
+      %(UPDATE users SET token = E'escaped' WHERE id = 5) => "UPDATE users SET token = [FILTERED] WHERE id = 5",
+      %(UPDATE users SET token = X'DEADBEEF' WHERE id = 6) => "UPDATE users SET token = [FILTERED] WHERE id = 6",
+      %(SELECT 1 FROM users WHERE token IN('a', 'b')) => "SELECT 1 FROM users WHERE token IN([FILTERED])",
+      %(SELECT 1 FROM users WHERE lower(email) = lower($$Bob@Example.com$$)) => "SELECT 1 FROM users WHERE lower(email) = lower([FILTERED])"
+    }.each { |sql, shown| assert_equal shown, Deadheat::SQL.readable({ sql: sql }) }
+  end
+
+  def test_a_backslash_before_a_quote_cannot_move_where_a_value_ends
+    skip "MySQL reads a backslash as an escape" if Deadheat::Redact.backslash_escapes?
+    shown = Deadheat::SQL.readable({ sql: %q(UPDATE users SET name = 'foo\', token = 'SECRET1' WHERE id = 1) })
+    refute_includes shown, "SECRET1"
+    assert_equal "UPDATE users SET name = [FILTERED], token = [FILTERED] WHERE id = 1", shown
+  end
+
+  def test_numbers_lists_and_ranges_of_a_hidden_column_are_hidden
+    {
+      "SELECT 1 FROM users WHERE token IN (123456, 99) AND id IN (1, 2)" => "SELECT 1 FROM users WHERE token IN ([FILTERED]) AND id IN (1, 2)",
+      "SELECT 1 FROM users WHERE token >= 123456 AND stock >= 3" => "SELECT 1 FROM users WHERE token >= [FILTERED] AND stock >= 3",
+      "SELECT 1 FROM users WHERE token BETWEEN 100 AND 200 AND id BETWEEN 1 AND 9" => "SELECT 1 FROM users WHERE token BETWEEN [FILTERED] AND id BETWEEN 1 AND 9",
+      "UPDATE users SET token = 0xDEADBEEF WHERE id = 5" => "UPDATE users SET token = [FILTERED] WHERE id = 5",
+      "SELECT 1 FROM users WHERE data->>'token' = 'SECRET3'" => "SELECT 1 FROM users WHERE data->>[FILTERED] = [FILTERED]"
+    }.each { |sql, shown| assert_equal shown, Deadheat::SQL.readable({ sql: sql }) }
+  end
+
+  def test_a_redirect_hides_the_parameters_the_app_hides
+    assert_equal "/done?token=[FILTERED]&page=2", Deadheat::Redact.url("/done?token=SECRET123&page=2")
+    assert_equal "/done?user[password]=[FILTERED]#top", Deadheat::Redact.url("/done?user[password]=hunter2#top")
+    assert_equal "/orders/7?page=2", Deadheat::Redact.url("/orders/7?page=2")
+    assert_equal "/orders/7", Deadheat::Redact.url("/orders/7")
+  end
+
+  def test_a_very_long_value_does_not_slow_the_query_down
+    blob = "ab" * 100_000
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    Deadheat::Redact.sql("INSERT INTO files (name, token, body) VALUES ('a.png', 't', x'#{blob}')")
+    Deadheat::Redact.sql("UPDATE files SET body = x'#{blob}', token = 'abc' WHERE id = 1")
+    Deadheat::Redact.sql("INSERT INTO files (name, body) VALUES ('a.png', x'#{blob}')")
+    assert_operator Process.clock_gettime(Process::CLOCK_MONOTONIC) - started, :<, 1.0
+  end
+
+  def test_what_is_not_a_value_is_left_alone
+    [
+      %(SELECT 1 FROM "users" INNER JOIN "invites" ON "users"."email" = "invites"."email"),
+      %(UPDATE "users" SET "name" = $1 WHERE "users"."id" = $2),
+      %(SELECT 1 FROM products WHERE name = "Shirt" AND stock = 3)
+    ].each { |sql| assert_equal sql, Deadheat::SQL.readable({ sql: sql }) }
   end
 
   def test_extra_emails_hide_the_address_when_the_app_hides_emails

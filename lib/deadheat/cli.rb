@@ -46,6 +46,9 @@ module Deadheat
         @out.puts("Unknown command “#{command}”.\n\n#{USAGE}")
         64
       end
+    rescue OptionParser::ParseError, ArgumentError => e
+      @out.puts("#{e.message}. Run bin/deadheat --help for the options.")
+      64
     end
 
     private
@@ -60,6 +63,8 @@ module Deadheat
         o.on("--no-tests") { options[:write_tests] = false }
       end
       paths = parser.parse(@argv)
+      raise ArgumentError, "--tries must be 1 or more" if options[:tries] && options[:tries] < 1
+
       require "deadheat/sweep/runner"
       runner = Sweep::Runner.new(paths: paths, out: @out, **options)
       runner.exit_code(runner.run)

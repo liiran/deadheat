@@ -2,6 +2,8 @@
 
 # A fresh, empty database with the dummy app's schema. Shared by the Minitest and RSpec suites.
 db_config = ActiveRecord::Base.connection_db_config
+# This empties the database it is pointed at, so it must be a test database.
+abort "Refusing to empty “#{db_config.database}”: it isn't named like a test database." unless Deadheat::Preflight.test_name?(db_config.database)
 $stdout.then do |out|
   $stdout = File.open(File::NULL, "w") # the database tasks print "already exists" and similar
   ActiveRecord::Tasks::DatabaseTasks.create(db_config)

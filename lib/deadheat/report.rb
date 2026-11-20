@@ -57,6 +57,10 @@ module Deadheat
     # so an id can never point outside that folder.
     RUN_ID = /\A[A-Za-z0-9][\w.-]*\z/
 
+    # What the page may load: nothing but its own inline styles. No scripts, images, fonts, forms or
+    # requests to anywhere, so even text that slipped past the escaping could not run or phone out.
+    CONTENT_POLICY = "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"
+
     def load(root, id = nil)
       return if id && !(id.is_a?(String) && id.match?(RUN_ID) && !id.include?(".."))
 
@@ -163,7 +167,7 @@ module Deadheat
       <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1">
-      <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+      <meta http-equiv="Content-Security-Policy" content="<%= CONTENT_POLICY %>">
       <title>Dead Heat report</title>
       <style>
         :root {

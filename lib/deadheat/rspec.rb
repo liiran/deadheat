@@ -44,7 +44,11 @@ module Deadheat
 end
 
 ::RSpec.configure do |config|
-  # Race specs run outside DatabaseCleaner's transaction; Dead Heat restores the tables itself.
-  config.around(:each, type: :race) { |example| Deadheat::DatabaseCleanerPause.pause { example.run } }
+  # Race specs run outside a transaction and DatabaseCleaner; Dead Heat restores the tables itself.
+  # So before any `before` block of the spec commits data, this must be a test database.
+  config.around(:each, type: :race) do |example|
+    Deadheat::Preflight.database!
+    Deadheat::DatabaseCleanerPause.pause { example.run }
+  end
   config.include Deadheat::RSpec::ExampleGroup, type: :race
 end

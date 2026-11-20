@@ -119,6 +119,8 @@ module Deadheat
 
           Preflight.check_pool!(definition.actors.size)
           tries = definition.tries_override || @tries || @config.tries
+          raise ArgumentError, "A race needs at least 1 try (got #{tries}): zero tries would pass without checking anything" if tries < 1
+
           with_test_job_adapter do
             @context.instance_exec(&definition.setup_block) if definition.setup_block
             @sessions = Sessions.new(@context, definition.actors)

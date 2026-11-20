@@ -202,18 +202,18 @@ Race: “two buyers, one shirt” broke in 18 of 20 tries (seed 50484, PostgreSQ
       OrderMailer#confirmation queued 1 more time
       user 298486374 got 302 → /orders/:new (one at a time: 302 → /products/7)
 
-    Why: Both requests read products before either one wrote to it (app/controllers/shop/checkouts_controller.rb:5), so each acted on a value the other was about to change.
+    Why: Both requests read products before either one wrote to it (app/controllers/shop/checkouts_controller.rb:9), so each acted on a value the other was about to change.
 
     What happened in try 1 (no pauses):
           …
-          8.5 ms  user 298486374 │ SELECT "products".* FROM "products" WHERE "products"."id" = 7 LIMIT 1  app/controllers/shop/checkouts_controller.rb:5
-          9.2 ms  user 980190962 │ SELECT "products".* FROM "products" WHERE "products"."id" = 7 LIMIT 1  app/controllers/shop/checkouts_controller.rb:5
+          8.5 ms  user 298486374 │ SELECT "products".* FROM "products" WHERE "products"."id" = 7 LIMIT 1  app/controllers/shop/checkouts_controller.rb:9
+          9.2 ms  user 980190962 │ SELECT "products".* FROM "products" WHERE "products"."id" = 7 LIMIT 1  app/controllers/shop/checkouts_controller.rb:9
           …
-         14.7 ms  user 980190962 │ INSERT INTO "orders" ("user_id", "product_id", "total_cents", …  app/controllers/shop/checkouts_controller.rb:11
-         15.7 ms  user 298486374 │ INSERT INTO "orders" ("user_id", "product_id", "total_cents", …  app/controllers/shop/checkouts_controller.rb:11
+         14.7 ms  user 980190962 │ INSERT INTO "orders" ("user_id", "product_id", "total_cents", …  app/controllers/shop/checkouts_controller.rb:15
+         15.7 ms  user 298486374 │ INSERT INTO "orders" ("user_id", "product_id", "total_cents", …  app/controllers/shop/checkouts_controller.rb:15
           …
-         19.6 ms  user 980190962 │ UPDATE "products" SET "stock" = 0, "updated_at" = '2026-11-18 07:21:02.753855' WHERE "products"."id" = 7  app/controllers/shop/checkouts_controller.rb:12
-         21.1 ms  user 298486374 │ UPDATE "products" SET "stock" = 0, "updated_at" = '2026-11-18 07:21:02.754908' WHERE "products"."id" = 7  app/controllers/shop/checkouts_controller.rb:12
+         19.6 ms  user 980190962 │ UPDATE "products" SET "stock" = 0, "updated_at" = '2026-11-18 07:21:02.753855' WHERE "products"."id" = 7  app/controllers/shop/checkouts_controller.rb:16
+         21.1 ms  user 298486374 │ UPDATE "products" SET "stock" = 0, "updated_at" = '2026-11-18 07:21:02.754908' WHERE "products"."id" = 7  app/controllers/shop/checkouts_controller.rb:16
 
     Fix:
       • Lock the row while deciding: wrap the read-check-write in `record.with_lock { … }`, so the second request waits and then sees the first one's change.
@@ -324,10 +324,11 @@ The sweep was also run on all of Lobsters, using only its own request specs:
 
 Two things to take from this. The sweep only sees what the tests reach, and on a real app that was a
 fifth to a quarter of the write endpoints. And not every flag is a bug: some were differences the app
-makes on purpose. "Real" is one person's reading of Lobsters' code; Lobsters hasn't been asked. Two of the
-seven have since been fixed there. The rest (today's nine are the same races, reached through more
-endpoints), and one more found in Spree, are still in today's code, so they aren't described in this
-repository.
+makes on purpose. "Real" is one person's reading of Lobsters' code; Lobsters hasn't been asked. One of
+the seven has since been fixed there, and one is a harmless crash for a moderator; those two are named
+in [`bench/results.md`](bench/results.md). The rest (today's nine are the same races, reached through
+more endpoints), and one more found in Spree, are still in today's code, so they aren't described in
+this repository.
 
 ### Compared with the tools Rails developers already use
 
@@ -380,7 +381,9 @@ run unless all of these are true:
 
 - Rails is in the test environment
 - the database's name has "test" in it as a word (`app_test`, `storage/test.sqlite3`,
-  `db/test/primary.sqlite3`; not `contest_production` or `test_scores_production`)
+  `db/test/primary.sqlite3`; not `contest_production`), and doesn't also name another environment
+  (`test_scores_production`, `ab_test_development`). In an app with several databases, this goes for
+  every one it writes to
 - the database doesn't say it was set up for another environment (Rails records this in
   `ar_internal_metadata`)
 
@@ -401,10 +404,16 @@ with an empty 204 and does nothing else; Dead Heat uses it to sign test users in
 your own computer, only in development and test, and only reads the results folder. Nothing is added in
 production.
 
-Two things to know about the dashboard. A development server inside a container sees your browser as
-another computer and answers 403; `DEADHEAT_DASHBOARD_ALLOW_REMOTE=1` turns the check off there. And a
-tunnel or port forward that adds no headers makes outside visitors look local, so don't put a
-development server that mounts it on the internet. `bin/deadheat report` gives the same page as a file.
+Three things to know about the dashboard:
+
+- A development server inside a container sees your browser as another computer and answers 403.
+  `DEADHEAT_DASHBOARD_ALLOW_REMOTE=1` drops the "from this computer" check there. The page must still
+  be asked for by a local name (`localhost`) or one your app accepts in `config.hosts`, and a script
+  on another website still can't read it. Anyone who can reach that port can, though, so publish the
+  port to your own computer only (`127.0.0.1:3000:3000`).
+- A tunnel or port forward that adds no headers makes outside visitors look local, so don't put a
+  development server that mounts the dashboard on the internet.
+- `bin/deadheat report` gives the same page as a file, with no server at all.
 
 **What it writes, and where.** Everything stays on your computer. Dead Heat doesn't send anything
 anywhere and has no network code.
@@ -489,6 +498,9 @@ docker compose run --rm dev bundle exec rake test             # SQLite, PostgreS
 docker compose run --rm dev bundle exec rake test:sweep       # sweep Corner Store end to end
 docker compose run --rm -e DB=postgres dev ruby bench/tools_bench.rb
 ```
+
+The demo app in `demo/` has its own Gemfile. `rake test:sweep` installs its gems the first time; to use
+the demo or the benchmarks directly, run `docker compose run --rm dev bundle exec rake demo:bundle` once.
 
 `BUNDLE_GEMFILE=gemfiles/rails_7_1.gemfile` (or 7_2, 8_0, 8_1) runs the tests against another Rails, and
 `docker compose --profile ruby4 run --rm dev4 …` against Ruby 4.

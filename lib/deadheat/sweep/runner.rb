@@ -172,11 +172,14 @@ module Deadheat
       end
 
       # Starts a test command and writes what it prints to a log. The command gets no input (a test
-      # that stops at a debugger prompt would otherwise wait forever) and a time limit.
+      # that stops at a debugger prompt would otherwise wait forever) and a time limit. It also gets
+      # its own process group, so when it runs past the limit, or the sweep is interrupted, the whole
+      # tree is stopped and not just the first process: a test run left behind would keep writing to
+      # the test database.
       def run_command(env, command, log)
         limit = Float(ENV.fetch("DEADHEAT_TEST_TIMEOUT", 1800))
         File.open(log, "w") do |io|
-          Open3.popen2e(env, *command, chdir: @root) do |stdin, output, wait|
+          Open3.popen2e(env, *command, chdir: @root, **own_group) do |stdin, output, wait|
             stdin.close
             reader = Thread.new { output.each_line { |line| io.write(line) } }
             unless wait.join(limit)
@@ -184,14 +187,28 @@ module Deadheat
               io.write("\nDead Heat stopped this command after #{limit.round} s (DEADHEAT_TEST_TIMEOUT).\n")
             end
             reader.join(5)
+          ensure
+            stop_process(wait.pid) if wait&.alive?
           end
         end
       rescue Errno::ENOENT => e
         File.write(log, "Couldn't start #{command.first}: #{e.message}\n")
       end
 
+      def windows?
+        RbConfig::CONFIG["host_os"].match?(/mswin|mingw|cygwin/)
+      end
+
+      def own_group
+        windows? ? { new_pgroup: true } : { pgroup: true }
+      end
+
       def stop_process(pid)
-        Process.kill("KILL", pid)
+        if windows?
+          system("taskkill", "/T", "/F", "/PID", pid.to_s, out: File::NULL, err: File::NULL)
+        else
+          Process.kill("KILL", -pid)
+        end
       rescue SystemCallError
         nil
       end

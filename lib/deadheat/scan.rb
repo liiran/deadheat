@@ -50,6 +50,10 @@ module Deadheat
     def start(argv, out: $stdout)
       root = Dir.pwd
       paths = argv.empty? ? default_paths(root) : argv
+      if files_in(paths).none? { |file| File.file?(file) }
+        out.puts "Dead Heat scan: no Ruby files to read in #{paths.empty? ? 'app/ or lib/' : paths.join(', ')}."
+        return 2
+      end
       suspects = run(root: root, paths: paths)
       print(suspects, out: out, root: root)
       dir = defined?(Deadheat.config) ? (Deadheat.config.results_dir || File.join(root, "tmp/deadheat")) : File.join(root, "tmp/deadheat")
@@ -64,14 +68,17 @@ module Deadheat
 
     def run(root:, paths: default_paths(root))
       schema = SchemaIndexes.load(root)
-      files = paths.flat_map { |path| File.directory?(path) ? Dir[File.join(path, "**/*.rb")] : [path] }.sort
-      files.flat_map do |file|
+      files_in(paths).flat_map do |file|
         relative = file.delete_prefix("#{root}/")
         Checker.new(relative, File.read(file), schema).suspects
       rescue StandardError => e
         warn "Dead Heat couldn't read #{relative}: #{e.message}"
         []
       end
+    end
+
+    def files_in(paths)
+      paths.flat_map { |path| File.directory?(path) ? Dir[File.join(path, "**/*.rb")] : [path] }.sort
     end
 
     def print(suspects, out:, root:)
